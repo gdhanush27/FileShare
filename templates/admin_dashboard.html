@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - File Upload System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .dashboard-header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .dashboard-header h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .dashboard-header p {
+            color: #7f8c8d;
+            font-size: 1.1em;
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .nav-links a {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 10px 20px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .nav-links a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 2.5em;
+            margin-bottom: 5px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-card p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .storage-card {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border: 1px solid #eee;
+        }
+
+        .chart-title {
+            font-size: 1.4em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .storage-progress {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #ecf0f1;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2ecc71, #27ae60);
+            border-radius: 15px;
+            transition: width 0.8s ease;
+            position: relative;
+        }
+
+        .progress-fill.warning {
+            background: linear-gradient(90deg, #f39c12, #e67e22);
+        }
+
+        .progress-fill.danger {
+            background: linear-gradient(90deg, #e74c3c, #c0392b);
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #2c3e50;
+            font-weight: 600;
+            z-index: 2;
+        }
+
+        .timeline-chart {
+            grid-column: 1 / -1;
+        }
+
+        .admin-form {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .form-group input[type="number"],
+        .form-group input[type="text"],
+        .form-group input[type="password"] {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 25px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+        }
+
+        .btn-warning {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .form-row input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .form-row input:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+
+        .section-title {
+            font-size: 1.2em;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-weight: 600;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 8px;
+        }
+
+        .flash-messages {
+            margin-bottom: 20px;
+        }
+
+        .flash-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .flash-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .flash-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            .dashboard-header h1 {
+                font-size: 2em;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .form-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <!-- FLASH MESSAGES -->
+    <div class="flash-messages" id="flashMessages">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash-message flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+    </div>
+
+    <!-- HEADER -->
+    <div class="dashboard-header">
+      <h1>📊 Admin Dashboard</h1>
+      <p>System Overview and Analytics</p>
+    </div>
+
+    <!-- NAVIGATION -->
+    <div class="nav-links">
+      <a href="{{ url_for('index') }}">📁 Files</a>
+      <a href="{{ url_for('index', show_all='1') }}">🔍 All Files</a>
+      <a href="{{ url_for('logout') }}">🚪 Logout</a>
+    </div>
+
+    <!-- STATS OVERVIEW -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h3 id="totalFiles">{{ data.total_files }}</h3>
+        <p>Total Files</p>
+      </div>
+      <div class="stat-card">
+        <h3 id="totalBundles">{{ data.total_bundles }}</h3>
+        <p>File Bundles</p>
+      </div>
+      <div class="stat-card">
+        <h3 id="totalUsers">{{ data.total_users }}</h3>
+        <p>Registered Users</p>
+      </div>
+      <div class="stat-card storage-card">
+        <h3 id="storagePercent">{{ data.storage_percentage }}%</h3>
+        <p>Storage Used</p>
+      </div>
+    </div>
+
+    <!-- STORAGE USAGE BAR -->
+    <div class="storage-progress">
+      <div class="chart-title">💾 Storage Usage: <span id="storageUsed">{{ data.storage_used }}</span> / <span id="maxStorage">{{ data.max_storage_mb }} MB</span></div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="storageBar" style="width: {{ data.storage_percentage }}%"></div>
+        <div class="progress-text" id="storageText">{{ data.storage_percentage }}% ({{ data.remaining_storage }} remaining)</div>
+      </div>
+    </div>
+
+    <!-- SYSTEM SETTINGS -->
+    <div class="admin-form">
+      <div class="chart-title">⚙️ System Settings</div>
+      <form id="settingsForm" action="{{ url_for('admin_dashboard') }}" method="POST">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="maxFileSize">Max file size (MB)</label>
+            <input type="number" id="maxFileSize" name="max_file_size_mb" value="{{ SETTINGS.max_file_size_mb }}" min="1">
+          </div>
+          <div class="form-group">
+            <label for="maxFiles">Max files per bundle</label>
+            <input type="number" id="maxFiles" name="max_files_per_bundle" value="{{ SETTINGS.max_files_per_bundle }}" min="1">
+          </div>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="registrationOpen" name="registration_open" {% if SETTINGS.registration_open %}checked{% endif %}>
+          <label for="registrationOpen">Allow new user registration</label>
+        </div>
+        <button type="submit" class="btn" style="margin-top: 15px;">💾 Save Settings</button>
+      </form>
+    </div>
+
+    <!-- USER MANAGEMENT -->
+    <div class="admin-form">
+      <div class="chart-title">👥 User Management</div>
+
+      <div class="section-title">Create New User</div>
+      <form id="createUserForm" action="{{ url_for('admin_create_user') }}" method="POST">
+        <div class="form-row">
+          <input type="text" name="username" placeholder="Username" required>
+          <input type="password" name="password" placeholder="Password" required>
+          <button type="submit" class="btn">➕ Create User</button>
+        </div>
+      </form>
+
+      <div class="section-title">Reset User Password</div>
+      <form id="resetPasswordForm" action="{{ url_for('admin_reset_password') }}" method="POST">
+        <div class="form-row">
+          <input type="text" name="username" placeholder="Username" required>
+          <input type="password" name="password" placeholder="New Password" required>
+          <button type="submit" class="btn btn-warning">🔑 Reset Password</button>
+        </div>
+      </form>
+
+      <div class="section-title">Delete User</div>
+      <form id="deleteUserForm" action="{{ url_for('admin_delete_user') }}" method="POST">
+        <div class="form-row">
+          <input type="text" name="username" placeholder="Username" required>
+          <button type="submit" class="btn btn-danger" onclick="return confirm('Delete user and all their files? This action cannot be undone.')">🗑️ Delete User</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ANALYTICS CHARTS -->
+    <div class="charts-grid">
+      <div class="chart-container">
+        <div class="chart-title">📊 File Types Distribution</div>
+        <canvas id="fileTypesChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <div class="chart-title">👥 Files per User</div>
+        <canvas id="userFilesChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <div class="chart-title">💾 Storage Usage by User</div>
+        <canvas id="userStorageChart"></canvas>
+      </div>
+      <div class="chart-container timeline-chart">
+        <div class="chart-title">📅 Upload Timeline</div>
+        <canvas id="timelineChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Chart.js configuration
+    Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+    Chart.defaults.color = '#2c3e50';
+    const chartColors = [
+      '#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF',
+      '#FF9F40','#C9CBCF','#4BC0C0','#FF6384','#36A2EB'
+    ];
+
+    // Data from Flask backend
+    const dashboardData = {
+      fileTypeStats: {{ data.file_type_stats | tojson }},
+      userFileCounts: {{ data.user_file_counts | tojson }},
+      userStorageBytes: {{ data.user_storage_bytes | tojson }},
+      filesByDate: {{ data.files_by_date | tojson }}
+    };
+
+    // File Types Doughnut Chart
+    new Chart(document.getElementById('fileTypesChart'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(dashboardData.fileTypeStats),
+        datasets: [{
+          data: Object.values(dashboardData.fileTypeStats),
+          backgroundColor: chartColors,
+          borderColor: '#fff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { usePointStyle: true }
+          }
+        }
+      }
+    });
+
+    // Files per User Bar Chart
+    new Chart(document.getElementById('userFilesChart'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(dashboardData.userFileCounts),
+        datasets: [{
+          label: 'Files',
+          data: Object.values(dashboardData.userFileCounts),
+          backgroundColor: 'rgba(102,126,234,0.8)',
+          borderColor: 'rgba(102,126,234,1)',
+          borderWidth: 2,
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // Storage per User Horizontal Bar Chart
+    new Chart(document.getElementById('userStorageChart'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(dashboardData.userStorageBytes),
+        datasets: [{
+          label: 'MB',
+          data: Object.values(dashboardData.userStorageBytes).map(b => b / (1024 * 1024)),
+          backgroundColor: 'rgba(118,75,162,0.8)',
+          borderColor: 'rgba(118,75,162,1)',
+          borderWidth: 2,
+          borderRadius: 8
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        scales: { x: { beginAtZero: true } },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // Timeline Line Chart
+    new Chart(document.getElementById('timelineChart'), {
+      type: 'line',
+      data: {
+        labels: Object.keys(dashboardData.filesByDate),
+        datasets: [{
+          label: 'Uploads',
+          data: Object.values(dashboardData.filesByDate),
+          borderColor: 'rgba(102,126,234,1)',
+          backgroundColor: 'rgba(102,126,234,0.1)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 3,
+          pointBackgroundColor: 'rgba(102,126,234,1)',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // Update storage bar color based on percentage
+    function updateStorageBar() {
+      const storageBar = document.getElementById('storageBar');
+      const percentage = {{ data.storage_percentage }};
+
+      storageBar.className = 'progress-fill';
+      if (percentage > 90) {
+        storageBar.classList.add('danger');
+      } else if (percentage > 75) {
+        storageBar.classList.add('warning');
+      }
+    }
+
+    // Initialize
+    updateStorageBar();
+  </script>
+</body>
+</html>

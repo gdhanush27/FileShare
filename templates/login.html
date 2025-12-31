@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | FileShare Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-dark: #3a56d4;
+            --secondary: #7209b7;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --success: #06d6a0;
+            --danger: #ef476f;
+            --warning: #ffd166;
+            --gray-light: #e9ecef;
+            --gray: #6c757d;
+            --border-radius: 16px;
+            --box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            color: var(--dark);
+        }
+
+        .auth-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .auth-card {
+            background: white;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--box-shadow);
+            display: flex;
+            min-height: 80vh;
+        }
+
+        .auth-left {
+            flex: 1;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .auth-left::before {
+            content: "";
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            top: -100px;
+            right: -100px;
+        }
+
+        .auth-left::after {
+            content: "";
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            bottom: -80px;
+            left: -80px;
+        }
+
+        .auth-left-content {
+            position: relative;
+            z-index: 2;
+            max-width: 500px;
+        }
+
+        .auth-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .auth-logo-icon {
+            font-size: 2.5rem;
+        }
+
+        .auth-logo-text {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .auth-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+            line-height: 1.3;
+        }
+
+        .auth-subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .auth-features {
+            list-style: none;
+            margin-top: 2rem;
+        }
+
+        .auth-features li {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+            font-size: 1.05rem;
+        }
+
+        .auth-features i {
+            background: rgba(255, 255, 255, 0.15);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .auth-right {
+            flex: 1;
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .auth-header {
+            margin-bottom: 2.5rem;
+        }
+
+        .auth-header h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--dark);
+        }
+
+        .auth-header p {
+            color: var(--gray);
+            font-size: 1.05rem;
+        }
+
+        .auth-form .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .form-control {
+            padding: 0.9rem 1.2rem;
+            border-radius: 10px;
+            border: 1px solid var(--gray-light);
+            transition: var(--transition);
+            font-size: 1.05rem;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+        }
+
+        .btn-auth {
+            width: 100%;
+            padding: 1rem;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: var(--transition);
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(67, 97, 238, 0.3);
+        }
+
+        .auth-footer {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 1.05rem;
+            color: var(--gray);
+        }
+
+        .auth-footer a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        .auth-footer a:hover {
+            color: var(--primary-dark);
+            text-decoration: underline;
+        }
+
+        .alert {
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .alert-danger {
+            background: rgba(239, 71, 111, 0.1);
+            border: 1px solid rgba(239, 71, 111, 0.2);
+            color: var(--danger);
+        }
+
+        .alert-success {
+            background: rgba(6, 214, 160, 0.1);
+            border: 1px solid rgba(6, 214, 160, 0.2);
+            color: var(--success);
+        }
+
+        .alert-info {
+            background: rgba(67, 97, 238, 0.1);
+            border: 1px solid rgba(67, 97, 238, 0.2);
+            color: var(--primary);
+        }
+
+        /* Responsive styles */
+        @media (max-width: 992px) {
+            .auth-card {
+                flex-direction: column;
+                min-height: auto;
+            }
+
+            .auth-left {
+                padding: 2rem;
+                min-height: 300px;
+            }
+
+            .auth-right {
+                padding: 2rem;
+            }
+
+            .auth-features {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 0.5rem;
+            }
+
+            .auth-left {
+                padding: 1.5rem;
+                min-height: 250px;
+            }
+
+            .auth-right {
+                padding: 1.5rem;
+            }
+
+            .auth-title {
+                font-size: 1.8rem;
+            }
+
+            .auth-header h2 {
+                font-size: 1.7rem;
+            }
+
+            .auth-logo-text {
+                font-size: 1.5rem;
+            }
+
+            .auth-logo-icon {
+                font-size: 2rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            body {
+                padding: 0.25rem;
+            }
+
+            .auth-left {
+                padding: 1rem;
+                min-height: 200px;
+            }
+
+            .auth-right {
+                padding: 1rem;
+            }
+
+            .auth-title {
+                font-size: 1.5rem;
+                margin-bottom: 1rem;
+            }
+
+            .auth-header h2 {
+                font-size: 1.5rem;
+            }
+
+            .auth-header p {
+                font-size: 0.95rem;
+            }
+
+            .auth-subtitle {
+                font-size: 1rem;
+                margin-bottom: 1rem;
+            }
+
+            .auth-logo-text {
+                font-size: 1.3rem;
+            }
+
+            .auth-logo-icon {
+                font-size: 1.8rem;
+            }
+
+            .form-control {
+                padding: 0.75rem 1rem;
+                font-size: 1rem;
+            }
+
+            .btn-auth {
+                padding: 0.8rem;
+                font-size: 1rem;
+            }
+
+            .auth-footer {
+                font-size: 0.95rem;
+            }
+
+            .alert {
+                padding: 0.75rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .auth-left {
+                padding: 0.75rem;
+            }
+
+            .auth-right {
+                padding: 0.75rem;
+            }
+
+            .auth-title {
+                font-size: 1.3rem;
+            }
+
+            .auth-header h2 {
+                font-size: 1.3rem;
+            }
+
+            .auth-logo-text {
+                font-size: 1.2rem;
+            }
+
+            .auth-logo-icon {
+                font-size: 1.6rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <!-- Left Side (Branding) -->
+            <div class="auth-left">
+                <div class="auth-left-content">
+                    <div class="auth-logo">
+                        <i class="bi bi-cloud-arrow-up-fill auth-logo-icon"></i>
+                        <span class="auth-logo-text">FileShare Pro</span>
+                    </div>
+
+                    <h1 class="auth-title">Secure File Sharing Made Simple</h1>
+                    <p class="auth-subtitle">Upload, share, and manage your files with our secure platform. Access your files anywhere, anytime.</p>
+
+                    <ul class="auth-features">
+                        <li>
+                            <i class="bi bi-shield-lock"></i>
+                            <span>Military-grade encryption for your files</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-lightning"></i>
+                            <span>Lightning fast uploads and downloads</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-infinity"></i>
+                            <span>Unlimited storage with premium plans</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Right Side (Form) -->
+            <div class="auth-right">
+                <div class="auth-form">
+                    <div class="auth-header">
+                        <h2>Welcome Back</h2>
+                        <p>Sign in to access your files and sharing history</p>
+                    </div>
+
+                    <!-- Flash Messages -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                      {% if messages %}
+                        {% for category, message in messages %}
+                          {% if category == 'error' %}
+                            <div class="alert alert-danger">
+                              <i class="bi bi-exclamation-circle me-2"></i>{{ message }}
+                            </div>
+                          {% elif category == 'success' %}
+                            <div class="alert alert-success">
+                              <i class="bi bi-check-circle me-2"></i>{{ message }}
+                            </div>
+                          {% else %}
+                            <div class="alert alert-info">
+                              <i class="bi bi-info-circle me-2"></i>{{ message }}
+                            </div>
+                          {% endif %}
+                        {% endfor %}
+                      {% endif %}
+                    {% endwith %}
+
+                    <form method="post">
+                        <div class="form-group">
+                            <label for="username" class="form-label">
+                                <i class="bi bi-person"></i>Username
+                            </label>
+                            <input type="text" class="form-control" id="username" name="username" required placeholder="Enter your username">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="password" class="form-label">
+                                <i class="bi bi-lock"></i>Password
+                            </label>
+                            <input type="password" class="form-control" id="password" name="password" required placeholder="Enter your password">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-auth mt-2">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+                        </button>
+                    </form>
+
+                    <div class="auth-footer">
+                        Don't have an account? <a href="{{ url_for('register') }}">Register now</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Remember username functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            var storedUser = sessionStorage.getItem('username');
+            if (storedUser) {
+                document.getElementById('username').value = storedUser;
+            }
+
+            // Auto-focus the first input field
+            document.querySelector('form').elements[0].focus();
+        });
+
+        // Store username in session storage when typing
+        document.getElementById('username').addEventListener('input', function() {
+            sessionStorage.setItem('username', this.value);
+        });
+    </script>
+</body>
+</html>
