@@ -1,0 +1,4 @@
+flask_session/*
+uploads/*
+files_db.json
+users.json
