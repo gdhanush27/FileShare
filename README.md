@@ -9,41 +9,69 @@ A secure, feature-rich file sharing application built with Flask that enables us
 - Role-based access control (Admin/User)
 - Secure password management
 - Session-based authentication with server-side storage
+- Public user profiles accessible without login
 
 ### 📁 File Management
 - Upload single or multiple files (up to 5 files at once)
-- Support for file bundles
+- Support for file bundles with visual distinction (purple theme)
 - Download individual files or entire bundles
-- File size limit: 40 MB per file
+- Configurable file size limit (default: 40 MB per file)
 - All file types supported
 - View file details (size, type, upload date)
+- Smart storage quota enforcement
 
 ### 👥 User Features
 - Personal file dashboard
+- Public user profiles at `/u/<username>`
 - Upload and manage your own files
 - Delete individual files or all files at once
 - View file metadata (timestamp, size, type)
+- **Storage Management:**
+  - Personal storage quota with visual progress bar
+  - Color-coded storage indicators (green/yellow/red)
+  - Configurable storage limits per user
+  - Public/private storage visibility toggle
+- **Profile Management:**
+  - Change password securely
+  - View account information
+  - Control storage statistics visibility
 
 ### 🛡️ Admin Features
 - Comprehensive admin dashboard with analytics
-- User management (create, delete, reset passwords)
+- **User Management:**
+  - Create new users
+  - Delete users and their files
+  - Reset user passwords
+  - Set individual user storage limits
 - View all files across all users
 - Storage usage statistics and visualization
 - File type distribution charts
 - User activity monitoring
-- Configurable settings:
+- **Configurable Settings:**
   - Maximum file size
   - Maximum files per bundle
   - Registration toggle (open/closed)
-- Storage quota tracking (500 MB limit)
+  - Total server storage limit (MB)
+  - Default user storage limit (MB)
+- Real-time storage quota tracking
 
 ### 📊 Analytics Dashboard
 - Total files and bundles count
 - Total users count
-- Storage usage visualization
-- File type distribution
+- Storage usage visualization with percentage
+- File type distribution charts
 - User storage usage breakdown
 - Upload timeline
+- Per-user storage limits display
+
+### 🎨 UI/UX Features
+- Modern, responsive design
+- Mobile-friendly interface
+- Color-coded file bundles (purple) vs regular files (blue)
+- Bootstrap-based styling
+- Chart.js visualizations
+- Progress bars for storage usage
+- Flash messages for user feedback
 
 ## Installation
 
@@ -81,6 +109,7 @@ A secure, feature-rich file sharing application built with Flask that enables us
 filesharepro/
 ├── app.py                      # Main application file
 ├── requirements.txt            # Python dependencies
+├── README.md                   # Documentation
 ├── files_db.json              # File metadata storage (auto-generated)
 ├── users.json                 # User data storage (auto-generated)
 ├── uploads/                   # Uploaded files directory
@@ -89,6 +118,7 @@ filesharepro/
     ├── index.html             # Main file listing page
     ├── login.html             # Login page
     ├── register.html          # Registration page
+    ├── profile.html           # User profile page
     ├── file.html              # Single file view
     ├── bundle.html            # Bundle view
     └── admin_dashboard.html   # Admin dashboard
@@ -108,21 +138,29 @@ UPLOAD_FOLDER = 'uploads'
 
 # Session lifetime
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
+
+# Application settings (configurable via admin dashboard)
+SETTINGS = {
+    'max_file_size_mb': 40,
+    'max_files_per_bundle': 5,
+    'registration_open': True,
+    'total_server_storage_mb': 102400,  # 100 GB
+    'default_user_storage_mb': 1024     # 1 GB per user
+}
 ```
 
 ### Admin Users
 Modify the `ADMIN_USERS` set in `app.py`:
 
 ```python
-ADMIN_USERS = {'gdhanush270', 'pavi'}
+ADMIN_USERS = {'gdhanush270'}
 ```
 
-### Storage Limit
-Default storage limit is 500 MB. Modify in the `admin_dashboard()` function:
-
-```python
-MAX_STORAGE_MB = 500
-```
+### Storage Limits
+- **Server Storage:** Configurable via admin dashboard (default: 100 GB)
+- **User Storage:** Configurable per user via admin dashboard (default: 1 GB)
+- Users cannot upload files if it would exceed their storage quota
+- Storage usage is tracked and displayed with visual progress bars
 
 ## Usage
 
@@ -137,12 +175,25 @@ MAX_STORAGE_MB = 500
    - Click "Choose Files" on the main page
    - Select up to 5 files
    - Click "Upload"
+   - Files are checked against your storage quota before upload
 
 3. **Manage files**
    - View all your uploaded files
    - Click on a file to view details
    - Download files individually
    - Delete files when no longer needed
+
+4. **Manage your profile**
+   - Access your profile at `/u/<your-username>`
+   - Change your password
+   - View your storage usage with visual indicators
+   - Toggle storage visibility (public/private)
+   - View file and bundle counts
+
+5. **View other users**
+   - Visit `/u/<username>` to view any user's public profile
+   - See their storage stats if they've made them public
+   - No login required to view public profiles
 
 ### For Admins
 
@@ -154,16 +205,20 @@ MAX_STORAGE_MB = 500
    - Create new users
    - Reset user passwords
    - Delete users and their files
+   - Set individual user storage limits
 
 3. **Configure settings**
    - Adjust maximum file size
    - Set maximum files per bundle
+   - Configure total server storage limit
+   - Set default user storage limit
    - Enable/disable registration
 
 4. **Monitor storage**
    - View total storage usage
    - Track storage by user
    - See file type distribution
+   - Monitor individual user quotas
 
 ## Security Features
 
@@ -173,6 +228,8 @@ MAX_STORAGE_MB = 500
 - Role-based access control
 - File ownership verification before deletion
 - Session-based authentication
+- Storage quota enforcement to prevent abuse
+- Public/private profile controls
 
 ## API Endpoints
 
@@ -182,14 +239,16 @@ MAX_STORAGE_MB = 500
 | `/login` | GET, POST | User login |
 | `/register` | GET, POST | User registration |
 | `/logout` | GET | User logout |
+| `/u/<username>` | GET, POST | User profile page (public view + password change) |
 | `/file/<file_id>` | GET | View file details |
 | `/download/<file_id>` | GET | Download file |
 | `/delete/<file_id>` | POST | Delete single file |
 | `/delete_all` | POST | Delete all user files |
-| `/admin` | GET, POST | Admin dashboard |
+| `/admin` | GET, POST | Admin dashboard and settings |
 | `/admin/create_user` | POST | Create new user (admin only) |
 | `/admin/reset_password` | POST | Reset user password (admin only) |
 | `/admin/delete_user` | POST | Delete user (admin only) |
+| `/admin/set_user_storage` | POST | Set user storage limit (admin only) |
 
 ## Dependencies
 
@@ -238,13 +297,37 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is open source and available under the [GNU GENERAL PUBLIC LICENSE](LICENSE).
 
 ## Authors
 
 - gdhanush270
-- pavi
 
 ## Support
 
 For issues, questions, or contributions, please open an issue in the repository.
+
+---
+
+## Recent Updates
+
+### Storage Management System
+- Per-user storage quotas with configurable limits
+- Visual progress bars showing storage usage
+- Color-coded indicators (green < 75%, yellow 75-90%, red ≥ 90%)
+- Upload restrictions when quota is exceeded
+- Admin controls for setting individual user limits
+
+### Profile System
+- Public user profiles accessible at `/u/<username>`
+- Profile viewable without login
+- Password change functionality (own profile only)
+- Public/private storage visibility toggle
+- Storage statistics display
+
+### UI Enhancements
+- Mobile-responsive design
+- Bundle files highlighted with purple theme
+- Regular files use blue theme
+- Improved navigation and user experience
+- Bootstrap-powered modern interface

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FileShare Pro | Secure File Sharing</title>
+    <title>{{ APP_NAME }} | Secure File Sharing</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
@@ -101,6 +101,10 @@
             margin-bottom: 1.25rem;
         }
 
+        .file-card.bundle-card {
+            border-left: 4px solid var(--secondary);
+        }
+
         .file-card .card-body {
             padding: 1.25rem;
         }
@@ -122,6 +126,11 @@
             justify-content: center;
             font-size: 1.5rem;
             color: var(--primary);
+        }
+
+        .file-icon.bundle-icon {
+            background: rgba(114, 9, 183, 0.1);
+            color: var(--secondary);
         }
 
         .file-meta {
@@ -380,22 +389,36 @@
     </style>
 </head>
 <body>
-    <!-- Navigation Bar -->
-    <nav class="navbar navbar-expand-lg">
-        <div class="container">
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="bi bi-cloud-arrow-up-fill"></i>
-                <span>FileShare Pro</span>
+                <i class="bi bi-shield-lock-fill"></i>
+                {{ APP_NAME }}
             </a>
-            <div class="d-flex align-items-center">
-                {% if is_admin %}
-                <span class="admin-badge me-2" onclick="location.href='{{ url_for('admin_dashboard') }}';">
-                    <i class="bi bi-shield-fill-check"></i> ADMIN
-                </span>
-                {% endif %}
-                <button class="btn btn-outline-light" onclick="location.href='{{ url_for('logout') }}';">
-                    <i class="bi bi-box-arrow-right"></i> Logout
-                </button>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}"><i class="bi bi-files me-1"></i>My Files</a>
+                    </li>
+                    {% if is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index', show_all='1') }}"><i class="bi bi-grid-3x3-gap me-1"></i>All Files</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin_dashboard') }}"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('profile', username=session['username']) }}"><i class="bi bi-person-circle me-1"></i>Profile</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-1"></i>Logout</a>
+                    </li>
+                </ul>
             </div>
         </div>
     </nav>
@@ -475,11 +498,11 @@
                     <div class="row">
                         {% for file_id, info in files.items() %}
                         <div class="col-12 col-md-6 col-lg-4">
-                            <div class="card file-card">
+                            <div class="card file-card {{ 'bundle-card' if info.is_bundle else '' }}">
                                 <div class="card-body">
                                     <div class="file-info">
-                                        <div class="file-icon">
-                                            <i class="bi bi-file-earmark-text"></i>
+                                        <div class="file-icon {{ 'bundle-icon' if info.is_bundle else '' }}">
+                                            <i class="bi bi-{{ 'archive-fill' if info.is_bundle else 'file-earmark-text' }}"></i>
                                         </div>
                                         <div class="file-meta">
                                             <div class="file-name">{{ info.filename }}</div>
@@ -544,7 +567,7 @@
 
     <div class="footer">
         <div class="container">
-            <p class="mb-1">FileShare Pro &copy; 2025. All rights reserved.</p>
+            <p class="mb-1">{{ APP_NAME }} &copy; 2025. All rights reserved.</p>
             <p class="text-muted small">Secure file sharing made simple</p>
         </div>
     </div>

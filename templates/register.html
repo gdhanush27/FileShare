@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register | FileShare Pro</title>
+    <title>Register | {{ APP_NAME }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
@@ -264,6 +264,69 @@
             color: var(--primary);
         }
 
+        .form-check {
+            padding-left: 0;
+        }
+
+        .form-check-input {
+            width: 1.25rem;
+            height: 1.25rem;
+            margin-right: 0.5rem;
+            border: 2px solid var(--gray-light);
+            cursor: pointer;
+        }
+
+        .form-check-input:checked {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .form-check-label {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .form-check-label a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .form-check-label a:hover {
+            text-decoration: underline;
+        }
+
+        .modal-header {
+            border-bottom: 1px solid var(--gray-light);
+            padding: 1.5rem;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            border-top: 1px solid var(--gray-light);
+            padding: 1rem 1.5rem;
+        }
+
+        .terms-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .terms-section h5 {
+            color: var(--primary);
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .terms-section p {
+            color: var(--dark);
+            line-height: 1.6;
+        }
+
         /* Responsive styles */
         @media (max-width: 992px) {
             .auth-card {
@@ -411,7 +474,7 @@
                 <div class="auth-left-content">
                     <div class="auth-logo">
                         <i class="bi bi-cloud-arrow-up-fill auth-logo-icon"></i>
-                        <span class="auth-logo-text">FileShare Pro</span>
+                        <span class="auth-logo-text">{{ APP_NAME }}</span>
                     </div>
 
                     <h1 class="auth-title">Join Our Community</h1>
@@ -485,6 +548,15 @@
                             <input type="password" class="form-control" id="confirm_password" name="confirm_password" required placeholder="Re-enter your password">
                         </div>
 
+                        <div class="form-group">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="terms" name="terms" required>
+                                <label class="form-check-label" for="terms">
+                                    I agree to the <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Terms & Conditions</a>
+                                </label>
+                            </div>
+                        </div>
+
                         <button type="submit" class="btn btn-primary btn-auth">
                             <i class="bi bi-person-plus me-2"></i>Create Account
                         </button>
@@ -498,6 +570,84 @@
         </div>
     </div>
 
+    <!-- Terms & Conditions Modal -->
+    <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="termsModalLabel">
+                        <i class="bi bi-file-text me-2"></i>Terms & Conditions
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="terms-section">
+                        <h5>1. Acceptance of Terms</h5>
+                        <p>By accessing and using {{ APP_NAME }}, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.</p>
+                    </div>
+
+                    <div class="terms-section">
+                        <h5>2. Use License</h5>
+                        <p>Permission is granted to temporarily download one copy of the materials on {{ APP_NAME }} for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title, and under this license you may not:</p>
+                        <ul>
+                            <li>Modify or copy the materials</li>
+                            <li>Use the materials for any commercial purpose or public display</li>
+                            <li>Attempt to reverse engineer any software contained on {{ APP_NAME }}</li>
+                            <li>Remove any copyright or other proprietary notations from the materials</li>
+                        </ul>
+                    </div>
+
+                    <div class="terms-section">
+                        <h5>3. User Responsibilities</h5>
+                        <p>You are responsible for maintaining the confidentiality of your account and password. You agree to accept responsibility for all activities that occur under your account. You must not:</p>
+                        <ul>
+                            <li>Upload files containing viruses, malware, or other harmful code</li>
+                            <li>Share copyrighted materials without permission</li>
+                            <li>Use the service for illegal activities</li>
+                            <li>Attempt to gain unauthorized access to other user accounts</li>
+                        </ul>
+                    </div>
+
+                    <div class="terms-section">
+                        <h5>4. Privacy Policy</h5>
+                        <p>Your privacy is important to us. We collect and use your personal information only as described in our Privacy Policy. We will not sell or share your personal information with third parties without your consent.</p>
+                    </div>
+
+                    <div class="terms-section">
+                        <h5>5. File Storage and Deletion</h5>
+                        <p>We reserve the right to delete files that violate our terms of service, contain illegal content, or have been inactive for extended periods. We are not responsible for any loss of data.</p>
+                    </div>
+
+                    <div class="terms-section">
+                        <h5>6. Limitation of Liability</h5>
+                        <p>{{ APP_NAME }} shall not be liable for any indirect, incidental, special, consequential or punitive damages resulting from your use of or inability to use the service.</p>
+                    </div>
+
+                    <div class="terms-section">
+                        <h5>7. Changes to Terms</h5>
+                        <p>We reserve the right to modify these terms at any time. We will notify users of any material changes. Continued use of the service after changes constitutes acceptance of the new terms.</p>
+                    </div>
+
+                    <div class="terms-section">
+                        <h5>8. Contact Information</h5>
+                        <p>If you have any questions about these Terms & Conditions, please contact us at support@filesharepro.com</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="acceptTerms()">Accept & Continue</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function acceptTerms() {
+            document.getElementById('terms').checked = true;
+            const modal = bootstrap.Modal.getInstance(document.getElementById('termsModal'));
+            modal.hide();
+        }
+    </script>
 </body>
 </html>

@@ -8,7 +8,7 @@ import mimetypes
 import json
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # Secure random key
+app.secret_key = "super-secret"
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'flask_session')
 
@@ -27,6 +27,9 @@ ALLOWED_EXTENSIONS = None  # None means allow all file types
 # Initialize server-side sessions
 Session(app)
 
+# Application name
+APP_NAME = "FileShare Pro"
+
 # File path for user storage
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
@@ -37,13 +40,15 @@ FILES_DB_FILE = os.path.join(os.path.dirname(__file__), 'files_db.json')
 file_db = {}
 
 # Helper to check admin
-ADMIN_USERS = {'gdhanush270', 'pavi'}
+ADMIN_USERS = {'gdhanush270'}
 
 # Application settings
 SETTINGS = {
     'max_file_size_mb': 40,
     'max_files_per_bundle': 5,
-    'registration_open': True
+    'registration_open': True,
+    'total_server_storage_mb': 500,  # Total server storage in MB (100 GB)
+    'user_storage_limit_mb': 50  # User storage limit in MB (applies to all users)
 }
 
 def load_users():
@@ -127,7 +132,7 @@ def register():
         flash('Registration successful! Please log in.', 'success')
         return redirect(url_for('login'))
     print("Returning register.html template")
-    return render_template('register.html')
+    return render_template('register.html', APP_NAME=APP_NAME)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -146,8 +151,8 @@ def login():
         else:
             print(f"Login failed for: {username}")
             flash('Invalid username or password!', 'error')
-            return render_template('login.html')
-    return render_template('login.html')
+            return render_template('login.html', APP_NAME=APP_NAME)
+    return render_template('login.html', APP_NAME=APP_NAME)
 
 @app.route('/logout')
 def logout():
@@ -155,6 +160,115 @@ def logout():
     session.pop('role', None)
     flash('Logged out successfully!', 'success')
     return redirect(url_for('login'))
+
+@app.route('/u/<username>', methods=['GET', 'POST'])
+def profile(username):
+    # Check if the profile user exists
+    if username not in USERS:
+        flash('User not found!', 'error')
+        return redirect(url_for('login'))
+    
+    # Determine if viewing own profile
+    current_user = session.get('username')
+    is_own_profile = (current_user == username)
+    
+    if request.method == 'POST':
+        # Password change requires login
+        if 'username' not in session:
+            flash('Please login to change your password!', 'error')
+            return redirect(url_for('login'))
+        
+        # Only allow password change for own profile
+        if not is_own_profile:
+            flash('You can only change your own password!', 'error')
+            return redirect(url_for('profile', username=username))
+        
+        # Handle storage visibility toggle
+        if 'toggle_storage_visibility' in request.form:
+            user = USERS.get(username)
+            current_visibility = user.get('storage_public', True)
+            user['storage_public'] = not current_visibility
+            save_users(USERS)
+            flash(f"Storage visibility set to {'public' if user['storage_public'] else 'private'}!", 'success')
+            return redirect(url_for('profile', username=username))
+        
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        # Validate inputs
+        if not current_password or not new_password or not confirm_password:
+            flash('All fields are required!', 'error')
+            return render_template('profile.html', username=username, user_info=USERS.get(username, {}), is_own_profile=is_own_profile, APP_NAME=APP_NAME)
+        
+        # Check current password
+        user = USERS.get(username)
+        if not user or user['password'] != current_password:
+            flash('Current password is incorrect!', 'error')
+            return render_template('profile.html', username=username, user_info=USERS.get(username, {}), is_own_profile=is_own_profile, APP_NAME=APP_NAME)
+        
+        # Check new passwords match
+        if new_password != confirm_password:
+            flash('New passwords do not match!', 'error')
+            return render_template('profile.html', username=username, user_info=USERS.get(username, {}), is_own_profile=is_own_profile, APP_NAME=APP_NAME)
+        
+        # Update password
+        USERS[username]['password'] = new_password
+        save_users(USERS)
+        flash('Password changed successfully!', 'success')
+        return redirect(url_for('profile', username=username))
+    
+    user_info = USERS.get(username, {})
+    
+    # Initialize storage_public if not set
+    if 'storage_public' not in user_info:
+        user_info['storage_public'] = True
+        USERS[username] = user_info
+        save_users(USERS)
+    
+    # Determine if storage should be visible
+    storage_visible = is_own_profile or user_info.get('storage_public', True)
+    
+    # Calculate user's storage usage
+    total_storage_bytes = 0
+    file_count = 0
+    bundle_count = 0
+    
+    for file_id, file_info in file_db.items():
+        if file_info.get('owner') == username:
+            if file_info.get('is_bundle'):
+                bundle_count += 1
+            else:
+                file_count += 1
+                if os.path.exists(file_info['path']):
+                    total_storage_bytes += os.path.getsize(file_info['path'])
+    
+    # Format storage size
+    def format_bytes(bytes_val):
+        if bytes_val < 1024:
+            return f"{bytes_val} B"
+        elif bytes_val < 1024 * 1024:
+            return f"{bytes_val/1024:.2f} KB"
+        elif bytes_val < 1024 * 1024 * 1024:
+            return f"{bytes_val/1024/1024:.2f} MB"
+        else:
+            return f"{bytes_val/1024/1024/1024:.2f} GB"
+    
+    # Calculate storage percentage
+    user_limit_bytes = SETTINGS.get('user_storage_limit_mb', 1024) * 1024 * 1024
+    storage_percentage = (total_storage_bytes / user_limit_bytes * 100) if user_limit_bytes > 0 else 0
+    
+    storage_info = {
+        'total_storage': format_bytes(total_storage_bytes),
+        'total_storage_bytes': total_storage_bytes,
+        'file_count': file_count,
+        'bundle_count': bundle_count,
+        'storage_limit': format_bytes(user_limit_bytes),
+        'storage_limit_bytes': user_limit_bytes,
+        'storage_percentage': round(storage_percentage, 1)
+    }
+    
+    return render_template('profile.html', user_info=user_info, username=username, storage_info=storage_info, is_own_profile=is_own_profile, storage_visible=storage_visible, APP_NAME=APP_NAME)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -174,6 +288,45 @@ def index():
             return redirect(request.url)
         if len(files) > 5:
             flash('Maximum 5 files allowed')
+            return redirect(request.url)
+
+        # Calculate current user storage usage
+        current_storage_bytes = 0
+        for file_id, file_info in file_db.items():
+            if file_info.get('owner') == username and not file_info.get('is_bundle'):
+                if os.path.exists(file_info['path']):
+                    current_storage_bytes += os.path.getsize(file_info['path'])
+        
+        # Get user storage limit
+        user_limit_mb = SETTINGS.get('user_storage_limit_mb', 1024)
+        user_limit_bytes = user_limit_mb * 1024 * 1024
+        
+        # Calculate size of files to be uploaded
+        upload_size_bytes = 0
+        temp_files = []
+        for file in files:
+            if file:
+                # Seek to end to get file size
+                file.seek(0, os.SEEK_END)
+                file_size = file.tell()
+                file.seek(0)  # Reset to beginning
+                upload_size_bytes += file_size
+                temp_files.append((file, file_size))
+        
+        # Check if upload would exceed storage limit
+        if current_storage_bytes + upload_size_bytes > user_limit_bytes:
+            def format_bytes(bytes_val):
+                if bytes_val < 1024:
+                    return f"{bytes_val} B"
+                elif bytes_val < 1024 * 1024:
+                    return f"{bytes_val/1024:.2f} KB"
+                elif bytes_val < 1024 * 1024 * 1024:
+                    return f"{bytes_val/1024/1024:.2f} MB"
+                else:
+                    return f"{bytes_val/1024/1024/1024:.2f} GB"
+            
+            available_space = user_limit_bytes - current_storage_bytes
+            flash(f'Upload failed! Storage limit exceeded. You have {format_bytes(available_space)} available out of {format_bytes(user_limit_bytes)} total storage.', 'error')
             return redirect(request.url)
 
         # Create a bundle for multiple files
@@ -221,7 +374,7 @@ def index():
         user_files = file_db
     else:
         user_files = {fid: info for fid, info in file_db.items() if info.get('owner') == username}
-    return render_template('index.html', files=user_files, is_admin=(role=='admin'), show_all=show_all)
+    return render_template('index.html', files=user_files, is_admin=(role=='admin'), show_all=show_all, APP_NAME=APP_NAME)
 
 @app.route('/file/<file_id>', methods=['GET'])
 def file_page(file_id):
@@ -248,7 +401,7 @@ def file_page(file_id):
             f"{total_size_bytes/1024:.1f} KB" if total_size_bytes < 1024*1024 else
             f"{total_size_bytes/1024/1024:.1f} MB"
         )
-        return render_template('bundle.html', bundle_info=file_info, files=bundle_files, file_id=file_id, bundle_size=bundle_size)
+        return render_template('bundle.html', bundle_info=file_info, files=bundle_files, file_id=file_id, bundle_size=bundle_size, APP_NAME=APP_NAME)
 
     file_size = None
     file_type = None
@@ -276,7 +429,7 @@ def file_page(file_id):
                 file_type = mime
         else:
             file_type = 'Unknown'
-    return render_template('file.html', file_info=file_info, file_id=file_id, file_size=file_size, file_type=file_type)
+    return render_template('file.html', file_info=file_info, file_id=file_id, file_size=file_size, file_type=file_type, APP_NAME=APP_NAME)
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
@@ -394,6 +547,8 @@ def admin_dashboard():
         try:
             SETTINGS['max_file_size_mb'] = max(1, int(request.form.get('max_file_size_mb', SETTINGS['max_file_size_mb'])))
             SETTINGS['max_files_per_bundle'] = max(1, int(request.form.get('max_files_per_bundle', SETTINGS['max_files_per_bundle'])))
+            SETTINGS['total_server_storage_mb'] = max(100, int(request.form.get('total_server_storage_mb', SETTINGS.get('total_server_storage_mb', 102400))))
+            SETTINGS['user_storage_limit_mb'] = max(10, int(request.form.get('user_storage_limit_mb', SETTINGS.get('user_storage_limit_mb', 1024))))
         except (TypeError, ValueError):
             flash('Invalid settings values.', 'error')
             return redirect(url_for('admin_dashboard'))
@@ -403,7 +558,7 @@ def admin_dashboard():
         return redirect(url_for('admin_dashboard'))
 
     # Calculate storage statistics
-    MAX_STORAGE_MB = 500
+    MAX_STORAGE_MB = SETTINGS.get('total_server_storage_mb', 102400)
     MAX_STORAGE_BYTES = MAX_STORAGE_MB * 1024 * 1024
 
     total_storage_used = 0
@@ -468,7 +623,7 @@ def admin_dashboard():
         'max_storage_mb': MAX_STORAGE_MB
     }
 
-    return render_template('admin_dashboard.html', data=dashboard_data, SETTINGS=SETTINGS)
+    return render_template('admin_dashboard.html', data=dashboard_data, SETTINGS=SETTINGS, USERS=USERS, APP_NAME=APP_NAME)
 
 
 def _require_admin():
