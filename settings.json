@@ -1,0 +1,8 @@
+{
+  "app_name": "FileShare Pro",
+  "max_file_size_mb": 40,
+  "max_files_per_bundle": 5,
+  "registration_open": true,
+  "total_server_storage_mb": 500,
+  "user_storage_limit_mb": 50
+}

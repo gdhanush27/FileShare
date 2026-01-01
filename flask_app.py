@@ -27,14 +27,14 @@ ALLOWED_EXTENSIONS = None  # None means allow all file types
 # Initialize server-side sessions
 Session(app)
 
-# Application name
-APP_NAME = "FileShare Pro"
-
 # File path for user storage
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
 # File path for file database storage
 FILES_DB_FILE = os.path.join(os.path.dirname(__file__), 'files_db.json')
+
+# File path for settings storage
+SETTINGS_FILE = os.path.join(os.path.dirname(__file__), 'settings.json')
 
 # In-memory file info storage: {file_id: {filename, path, timestamp}}
 file_db = {}
@@ -44,12 +44,33 @@ ADMIN_USERS = {'gdhanush270'}
 
 # Application settings
 SETTINGS = {
+    'app_name': 'FileShare Pro',
     'max_file_size_mb': 40,
     'max_files_per_bundle': 5,
     'registration_open': True,
     'total_server_storage_mb': 500,  # Total server storage in MB (100 GB)
     'user_storage_limit_mb': 50  # User storage limit in MB (applies to all users)
 }
+
+def load_settings():
+    """Load settings from JSON file"""
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, 'r') as f:
+                loaded_settings = json.load(f)
+                # Merge with default settings to ensure all keys exist
+                for key, value in loaded_settings.items():
+                    SETTINGS[key] = value
+        except (json.JSONDecodeError, IOError):
+            pass
+
+def save_settings():
+    """Save settings to JSON file"""
+    try:
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(SETTINGS, f, indent=2)
+    except IOError:
+        pass
 
 def load_users():
     """Load users from JSON file"""
@@ -90,14 +111,20 @@ def save_files_db(files_db):
     except IOError:
         pass
 
+# Load settings on startup
+load_settings()
+
 # Load users on startup
 USERS = load_users()
 
 # Load files database on startup
 file_db = load_files_db()
 
+# Application name (pulled from settings)
+APP_NAME = SETTINGS.get('app_name', 'FileShare Pro')
+
 def is_admin(username):
-    return username in ADMIN_USERS
+    return username.lower() in ADMIN_USERS
 
 def allowed_file(filename):
     if ALLOWED_EXTENSIONS is None:
@@ -122,12 +149,16 @@ def register():
         if password != confirm_password:
             flash('Passwords do not match!', 'error')
             return render_template('register.html')
-        if username in USERS:
+        
+        # Convert username to lowercase for case-insensitive comparison
+        username_lower = username.lower()
+        if username_lower in USERS:
             flash('Username already exists!', 'error')
             return render_template('register.html')
-        USERS[username] = {'password': password, 'role': 'user'}
+        
+        USERS[username_lower] = {'password': password, 'role': 'user'}
         save_users(USERS)
-        print(f"User registered successfully: {username}")
+        print(f"User registered successfully: {username_lower}")
         print(f"Current users: {list(USERS.keys())}")
         flash('Registration successful! Please log in.', 'success')
         return redirect(url_for('login'))
@@ -140,16 +171,19 @@ def login():
         username = request.form.get('username') or ""
         password = request.form.get('password') or ""
         print(f"Login attempt - Username: {username}, Password: {password}")
-        user = USERS.get(username)
+        
+        # Convert username to lowercase for case-insensitive lookup
+        username_lower = username.lower()
+        user = USERS.get(username_lower)
         print(f"User found: {user}")
         if user and user['password'] == password:
-            session['username'] = username
+            session['username'] = username_lower
             session['role'] = user['role']
-            print(f"Login successful for: {username}")
+            print(f"Login successful for: {username_lower}")
             flash('Login successful!', 'success')
             return redirect(url_for('index'))
         else:
-            print(f"Login failed for: {username}")
+            print(f"Login failed for: {username_lower}")
             flash('Invalid username or password!', 'error')
             return render_template('login.html', APP_NAME=APP_NAME)
     return render_template('login.html', APP_NAME=APP_NAME)
@@ -227,7 +261,9 @@ def profile(username):
         save_users(USERS)
     
     # Determine if storage should be visible
-    storage_visible = is_own_profile or user_info.get('storage_public', True)
+    # Admins can always see storage, even if private
+    is_admin_viewing = current_user and is_admin(current_user)
+    storage_visible = is_own_profile or user_info.get('storage_public', True) or is_admin_viewing
     
     # Calculate user's storage usage
     total_storage_bytes = 0
@@ -553,7 +589,15 @@ def admin_dashboard():
             flash('Invalid settings values.', 'error')
             return redirect(url_for('admin_dashboard'))
 
+        # Update app name
+        app_name = request.form.get('app_name', '').strip()
+        if app_name:
+            SETTINGS['app_name'] = app_name
+            global APP_NAME
+            APP_NAME = app_name
+
         SETTINGS['registration_open'] = bool(request.form.get('registration_open'))
+        save_settings()
         flash('Settings updated successfully.', 'success')
         return redirect(url_for('admin_dashboard'))
 
@@ -645,13 +689,15 @@ def admin_create_user():
         flash('Username and password are required.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    if username in USERS:
+    # Convert username to lowercase for case-insensitive comparison
+    username_lower = username.lower()
+    if username_lower in USERS:
         flash('User already exists.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    USERS[username] = {'password': password, 'role': 'user'}
+    USERS[username_lower] = {'password': password, 'role': 'user'}
     save_users(USERS)
-    flash(f'User {username} created successfully.', 'success')
+    flash(f'User {username_lower} created successfully.', 'success')
     return redirect(url_for('admin_dashboard'))
 
 
@@ -667,13 +713,15 @@ def admin_reset_password():
         flash('Username and new password are required.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    if username not in USERS:
+    # Convert username to lowercase for case-insensitive lookup
+    username_lower = username.lower()
+    if username_lower not in USERS:
         flash('User does not exist.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    USERS[username]['password'] = password
+    USERS[username_lower]['password'] = password
     save_users(USERS)
-    flash(f'Password reset for {username}.', 'success')
+    flash(f'Password reset for {username_lower}.', 'success')
     return redirect(url_for('admin_dashboard'))
 
 
@@ -688,18 +736,20 @@ def admin_delete_user():
         flash('Username is required.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    if username not in USERS:
+    # Convert username to lowercase for case-insensitive lookup
+    username_lower = username.lower()
+    if username_lower not in USERS:
         flash('User does not exist.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    if is_admin(username):
+    if is_admin(username_lower):
         flash('Cannot delete an admin user.', 'error')
         return redirect(url_for('admin_dashboard'))
 
     # Remove user files and bundles
     ids_to_delete = []
     for fid, info in list(file_db.items()):
-        if info.get('owner') == username:
+        if info.get('owner') == username_lower:
             ids_to_delete.append(fid)
 
     for fid in ids_to_delete:
@@ -726,8 +776,9 @@ def admin_delete_user():
 
     save_files_db(file_db)
 
-    USERS.pop(username, None)
+    USERS.pop(username_lower, None)
     save_users(USERS)
+    flash(f'User {username_lower} deleted successfully.', 'success')
     flash(f'User {username} and their files were removed.', 'success')
     return redirect(url_for('admin_dashboard'))
 
