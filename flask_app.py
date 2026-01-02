@@ -156,7 +156,7 @@ def register():
             flash('Username already exists!', 'error')
             return render_template('register.html')
         
-        USERS[username_lower] = {'password': password, 'role': 'user'}
+        USERS[username_lower] = {'password': password, 'role': 'user', 'storage_limit_mb': 50}
         save_users(USERS)
         print(f"User registered successfully: {username_lower}")
         print(f"Current users: {list(USERS.keys())}")
@@ -290,8 +290,9 @@ def profile(username):
         else:
             return f"{bytes_val/1024/1024/1024:.2f} GB"
     
-    # Calculate storage percentage
-    user_limit_bytes = SETTINGS.get('user_storage_limit_mb', 1024) * 1024 * 1024
+    # Calculate storage percentage (use user-specific limit or default to 50MB)
+    user_limit_mb = user_info.get('storage_limit_mb', 50)
+    user_limit_bytes = user_limit_mb * 1024 * 1024
     storage_percentage = (total_storage_bytes / user_limit_bytes * 100) if user_limit_bytes > 0 else 0
     
     storage_info = {
@@ -333,8 +334,9 @@ def index():
                 if os.path.exists(file_info['path']):
                     current_storage_bytes += os.path.getsize(file_info['path'])
         
-        # Get user storage limit
-        user_limit_mb = SETTINGS.get('user_storage_limit_mb', 1024)
+        # Get user storage limit (use user-specific limit or default to 50MB)
+        user_data = USERS.get(username, {})
+        user_limit_mb = user_data.get('storage_limit_mb', 50)
         user_limit_bytes = user_limit_mb * 1024 * 1024
         
         # Calculate size of files to be uploaded
@@ -695,7 +697,7 @@ def admin_create_user():
         flash('User already exists.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    USERS[username_lower] = {'password': password, 'role': 'user'}
+    USERS[username_lower] = {'password': password, 'role': 'user', 'storage_limit_mb': 50}
     save_users(USERS)
     flash(f'User {username_lower} created successfully.', 'success')
     return redirect(url_for('admin_dashboard'))
@@ -722,6 +724,39 @@ def admin_reset_password():
     USERS[username_lower]['password'] = password
     save_users(USERS)
     flash(f'Password reset for {username_lower}.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/admin/update_storage_limit', methods=['POST'])
+def admin_update_storage_limit():
+    if not _require_admin():
+        return redirect(url_for('login'))
+
+    username = (request.form.get('username') or '').strip()
+    storage_limit_mb = request.form.get('storage_limit_mb')
+
+    if not username:
+        flash('Username is required.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    # Convert username to lowercase for case-insensitive lookup
+    username_lower = username.lower()
+    if username_lower not in USERS:
+        flash('User does not exist.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    try:
+        storage_limit_mb = int(storage_limit_mb)
+        if storage_limit_mb < 1:
+            flash('Storage limit must be at least 1 MB.', 'error')
+            return redirect(url_for('admin_dashboard'))
+    except (TypeError, ValueError):
+        flash('Invalid storage limit value.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    USERS[username_lower]['storage_limit_mb'] = storage_limit_mb
+    save_users(USERS)
+    flash(f'Storage limit for {username_lower} updated to {storage_limit_mb} MB.', 'success')
     return redirect(url_for('admin_dashboard'))
 
 

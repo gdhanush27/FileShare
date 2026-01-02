@@ -339,9 +339,9 @@
                             <i class="bi bi-person"></i>Owner
                         </div>
                         <div class="detail-value">
-                            <span class="owner-badge">
+                            <a href="{{ url_for('profile', username=file_info.owner) }}" class="owner-badge" style="text-decoration: none;">
                                 <i class="bi bi-shield-check"></i>{{ file_info.owner }}
-                            </span>
+                            </a>
                         </div>
                     </div>
                     <div class="detail-item">

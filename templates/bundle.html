@@ -353,9 +353,9 @@
                 <h1 class="bundle-title">File Bundle</h1>
                 <p class="bundle-subtitle">
                     Uploaded by
-                    <span class="owner-badge">
+                    <a href="{{ url_for('profile', username=bundle_info.owner) }}" class="owner-badge" style="text-decoration: none;">
                         <i class="bi bi-person-fill"></i>{{ bundle_info.owner }}
-                    </span>
+                    </a>
                     on {{ bundle_info.timestamp }}
                 </p>
             </div>
@@ -391,8 +391,8 @@
                                 </div>
                             </div>
                         </div>
-                        <a href="{{ url_for('download_file', file_id=file_id) }}" class="download-btn">
-                            <i class="bi bi-download"></i> Download
+                        <a href="{{ '#' if file_info.size == 'N/A' else url_for('download_file', file_id=file_id) }}" class="download-btn {{ 'disabled' if file_info.size == 'N/A' else '' }}" {{ 'style="pointer-events: none; opacity: 0.5;"' if file_info.size == 'N/A' else '' }}>
+                            <i class="bi bi-download"></i> {{ 'Unavailable' if file_info.size == 'N/A' else 'Download' }}
                         </a>
                     </div>
                     {% endif %}

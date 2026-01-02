@@ -417,6 +417,7 @@
                                 <th scope="col">Username</th>
                                 <th scope="col" class="text-center d-none d-md-table-cell">Files</th>
                                 <th scope="col" class="text-end">Storage Used</th>
+                                <th scope="col" class="text-center">Storage Limit</th>
                                 <th scope="col" class="text-center">Actions</th>
                             </tr>
                         </thead>
@@ -441,7 +442,8 @@
                                             {{ data.user_storage_usage.get(username, '0 B') }}
                                         </span>
                                         {% set user_bytes = data.user_storage_bytes.get(username, 0) %}
-                                        {% set user_limit_bytes = SETTINGS.get('user_storage_limit_mb', 1024) * 1024 * 1024 %}
+                                        {% set user_limit_mb = user_data.get('storage_limit_mb', 50) %}
+                                        {% set user_limit_bytes = user_limit_mb * 1024 * 1024 %}
                                         {% set user_percent = ((user_bytes / user_limit_bytes) * 100) if user_limit_bytes > 0 else 0 %}
                                         <div class="progress" style="width: 100px; height: 6px;">
                                             <div class="progress-bar {% if user_percent > 90 %}bg-danger{% elif user_percent > 75 %}bg-warning{% else %}bg-success{% endif %}" 
@@ -454,6 +456,14 @@
                                         </div>
                                         <small class="text-muted">{{ "%.1f" | format(user_percent) }}% of limit</small>
                                     </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="fw-semibold">{{ user_limit_mb }} MB</span>
+                                    <button class="btn btn-sm btn-outline-primary ms-2" 
+                                            onclick="editStorageLimit('{{ username }}', {{ user_limit_mb }})" 
+                                            title="Edit Storage Limit">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
                                 </td>
                                 <td class="text-center">
                                     <button class="btn btn-sm btn-warning me-1" 
@@ -529,6 +539,21 @@
                     </div>
                 </form>-->
 
+                <!-- Hidden Forms for Modal Actions -->
+                <form id="resetPasswordForm" action="{{ url_for('admin_reset_password') }}" method="POST" style="display: none;">
+                    <input type="hidden" name="username">
+                    <input type="hidden" name="password">
+                </form>
+
+                <form id="deleteUserForm" action="{{ url_for('admin_delete_user') }}" method="POST" style="display: none;">
+                    <input type="hidden" name="username">
+                </form>
+
+                <form id="updateStorageLimitForm" action="{{ url_for('admin_update_storage_limit') }}" method="POST" style="display: none;">
+                    <input type="hidden" name="username">
+                    <input type="hidden" name="storage_limit_mb">
+                </form>
+
             </div>
             </div>
             </div>
@@ -594,6 +619,39 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-danger" onclick="submitDeleteUser()">
                         <i class="bi bi-trash me-2"></i>Delete User
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Storage Limit Modal -->
+    <div class="modal fade" id="editStorageLimitModal" tabindex="-1" aria-labelledby="editStorageLimitModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editStorageLimitModalLabel">
+                        <i class="bi bi-hdd-stack me-2"></i>Edit Storage Limit
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="modalStorageLimitForm">
+                        <div class="mb-3">
+                            <label for="storageLimitUsername" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="storageLimitUsername" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="storageLimitValue" class="form-label">Storage Limit (MB)</label>
+                            <input type="number" class="form-control" id="storageLimitValue" placeholder="Enter storage limit in MB" min="1" required>
+                            <div class="form-text">Set the storage limit for this user in megabytes (minimum 1 MB)</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitStorageLimit()">
+                        <i class="bi bi-check-circle me-2"></i>Update Limit
                     </button>
                 </div>
             </div>
@@ -755,6 +813,35 @@
             document.getElementById('modalNewPassword').value = '';
             const modal = new bootstrap.Modal(document.getElementById('resetPasswordModal'));
             modal.show();
+        }
+
+        // Edit storage limit
+        function editStorageLimit(username, currentLimit) {
+            document.getElementById('storageLimitUsername').value = username;
+            document.getElementById('storageLimitValue').value = currentLimit;
+            const modal = new bootstrap.Modal(document.getElementById('editStorageLimitModal'));
+            modal.show();
+        }
+
+        // Submit storage limit update
+        function submitStorageLimit() {
+            const username = document.getElementById('storageLimitUsername').value;
+            const storageLimit = document.getElementById('storageLimitValue').value;
+            
+            if (storageLimit && parseInt(storageLimit) > 0) {
+                const form = document.getElementById('updateStorageLimitForm');
+                form.querySelector('input[name="username"]').value = username;
+                form.querySelector('input[name="storage_limit_mb"]').value = storageLimit;
+                
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editStorageLimitModal'));
+                modal.hide();
+                
+                // Submit form
+                form.submit();
+            } else {
+                alert('Please enter a valid storage limit (minimum 1 MB)');
+            }
         }
 
         // Submit reset password from modal
