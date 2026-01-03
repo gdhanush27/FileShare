@@ -443,6 +443,7 @@ def file_page(file_id):
 
     file_size = None
     file_type = None
+    is_image = False
     if file_info and os.path.exists(file_info['path']):
         size_bytes = os.path.getsize(file_info['path'])
         if size_bytes < 1024:
@@ -455,6 +456,7 @@ def file_page(file_id):
         if mime:
             if mime.startswith('image/'):
                 file_type = 'Image'
+                is_image = True
             elif mime.startswith('video/'):
                 file_type = 'Video'
             elif mime.startswith('audio/'):
@@ -467,7 +469,7 @@ def file_page(file_id):
                 file_type = mime
         else:
             file_type = 'Unknown'
-    return render_template('file.html', file_info=file_info, file_id=file_id, file_size=file_size, file_type=file_type, APP_NAME=APP_NAME)
+    return render_template('file.html', file_info=file_info, file_id=file_id, file_size=file_size, file_type=file_type, is_image=is_image, APP_NAME=APP_NAME, session=session, is_admin=is_admin(session.get('username', '')))
 
 @app.route('/download/<file_id>')
 def download_file(file_id):

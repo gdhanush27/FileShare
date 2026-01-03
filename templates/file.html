@@ -138,6 +138,22 @@
             margin: 0 auto 1.5rem;
         }
 
+        .file-preview-image {
+            max-width: 100%;
+            margin: 0 auto 1.5rem;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: var(--box-shadow);
+        }
+
+        .preview-img {
+            width: 100%;
+            max-height: 500px;
+            object-fit: contain;
+            display: block;
+            background: #f8f9fa;
+        }
+
         .file-title {
             font-size: 1.8rem;
             font-weight: 700;
@@ -268,6 +284,10 @@
                 height: 80px;
                 font-size: 2.5rem;
             }
+
+            .preview-img {
+                max-height: 300px;
+            }
         }
     </style>
 </head>
@@ -310,13 +330,28 @@
         <div class="file-details-container">
             {% if file_info %}
             <div class="file-header">
+                {% if is_image %}
+                <div class="file-preview-image">
+                    <img src="{{ url_for('download_file', file_id=file_id) }}" alt="{{ file_info.filename }}" class="preview-img">
+                </div>
+                {% else %}
                 <div class="file-icon-large">
                     <i class="bi bi-file-earmark-text"></i>
                 </div>
+                {% endif %}
                 <h1 class="file-title">{{ file_info.filename }}</h1>
                 <p class="file-subtitle">File details and download options</p>
             </div>
 
+            <div class="action-buttons">
+                <a href="{{ url_for('download_file', file_id=file_id) }}" class="btn btn-success">
+                    <i class="bi bi-download"></i> Download File
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-house"></i> Back to Home
+                </a>
+            </div>
+            <br/>
             <div class="card details-card">
                 <div class="card-header">
                     <i class="bi bi-info-circle me-2"></i>File Information
@@ -357,15 +392,6 @@
                         <div class="detail-value">{{ file_type if file_type else 'Unknown' }}</div>
                     </div>
                 </div>
-            </div>
-
-            <div class="action-buttons">
-                <a href="{{ url_for('download_file', file_id=file_id) }}" class="btn btn-success">
-                    <i class="bi bi-download"></i> Download File
-                </a>
-                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
-                    <i class="bi bi-house"></i> Back to Home
-                </a>
             </div>
             {% else %}
             <div class="card">
