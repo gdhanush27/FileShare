@@ -69,7 +69,12 @@
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(0,0,0,0.12);
         }
-
+        .footer {
+            text-align: center;
+            padding: 2rem 0 1rem;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
         .stat-card {
             background: linear-gradient(120deg, var(--primary), var(--secondary));
             color: white;
@@ -913,5 +918,25 @@
         // Initialize
         updateStorageBar();
     </script>
+
+    <div class="footer">
+        <div class="container">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                <span>Built with ❤️ by</span>
+                <a href="https://github.com/gdhanush27" target="_blank" rel="noopener noreferrer" 
+                   style="color: var(--primary); text-decoration: none; font-weight: 500; transition: var(--transition);" 
+                   onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+                    <i class="bi bi-github"></i> @gdhanush27
+                </a>
+                <span>|</span>
+                <a href="https://github.com/gdhanush27/FileShare" target="_blank" rel="noopener noreferrer" 
+                   style="color: var(--primary); text-decoration: none; font-weight: 500; transition: var(--transition);" 
+                   onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+                    <i class="bi bi-code-slash"></i> View Source
+                </a>
+            </div>
+            <p class="text-muted small mb-0">Admin Dashboard - Secure file sharing made simple</p>
+        </div>
+    </div>
 </body>
 </html>
