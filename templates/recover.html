@@ -122,6 +122,61 @@
             margin-top: 0.2rem;
         }
 
+        .recovery-tabs {
+            margin-bottom: 2rem;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 1rem;
+            border: 2px solid var(--gray-light);
+            background: white;
+            color: var(--gray);
+            font-weight: 600;
+            font-size: 1.05rem;
+            cursor: pointer;
+            transition: var(--transition);
+            border-radius: 0;
+        }
+
+        .tab-btn:first-child {
+            border-radius: 10px 0 0 10px;
+        }
+
+        .tab-btn:last-child {
+            border-radius: 0 10px 10px 0;
+            border-left: none;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .tab-btn:not(.active):hover {
+            background: var(--gray-light);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .dev-badge {
+            display: inline-block;
+            background: var(--warning);
+            color: var(--dark);
+            padding: 0.3rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-left: 0.5rem;
+        }
+
         .form-group {
             margin-bottom: 1.5rem;
         }
@@ -250,8 +305,8 @@
                     <i class="bi bi-arrow-counterclockwise auth-logo-icon"></i>
                     <span>{{ APP_NAME }}</span>
                 </div>
-                <h2>Recover Your Account</h2>
-                <p>Submit a recovery request for admin approval</p>
+                <h2>Account Recovery</h2>
+                <p>Recover your account or reset your password</p>
             </div>
 
             <!-- Flash Messages -->
@@ -279,54 +334,100 @@
               {% endif %}
             {% endwith %}
 
-            <div class="info-box">
-                <h5>
-                    <i class="bi bi-info-circle-fill"></i>
-                    About Account Recovery
-                </h5>
-                <ul>
-                    <li>
-                        <i class="bi bi-check-circle-fill"></i>
-                        <span>Recovery is available for accounts permanently deleted more than 30 days ago</span>
-                    </li>
-                    <li>
-                        <i class="bi bi-shield-check"></i>
-                        <span><strong>Admin approval required</strong> - Your recovery request will be reviewed by an administrator</span>
-                    </li>
-                    <li>
-                        <i class="bi bi-key-fill"></i>
-                        <span>You must enter your <strong>last password</strong> to verify your identity</span>
-                    </li>
-                    <li>
-                        <i class="bi bi-exclamation-triangle-fill"></i>
-                        <span>Admin may recover your account with or without previously uploaded files</span>
-                    </li>
-                    <li>
-                        <i class="bi bi-clock-history"></i>
-                        <span>If your account was deleted less than 30 days ago, you can log in directly to recover it</span>
-                    </li>
-                </ul>
+            <!-- Recovery Tabs -->
+            <div class="recovery-tabs">
+                <div class="d-flex">
+                    <button type="button" class="tab-btn active" data-tab="forgot-password">
+                        <i class="bi bi-key me-2"></i>Forgot Password
+                        <span class="dev-badge">UNDER DEV</span>
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="deleted-account">
+                        <i class="bi bi-arrow-counterclockwise me-2"></i>Deleted Account
+                    </button>
+                </div>
             </div>
 
-            <form method="post">
-                <div class="form-group">
-                    <label for="username" class="form-label">
-                        <i class="bi bi-person"></i>Username
-                    </label>
-                    <input type="text" class="form-control" id="username" name="username" required placeholder="Enter your username">
+            <!-- Forgot Password Tab -->
+            <div class="tab-content active" id="forgot-password">
+                <div class="alert alert-info">
+                    <i class="bi bi-tools me-2"></i>
+                    <strong>Feature Under Development</strong><br>
+                    Password reset functionality is currently being developed. Please check back later or contact the administrator for assistance.
                 </div>
 
-                <div class="form-group">
-                    <label for="password" class="form-label">
-                        <i class="bi bi-lock"></i>Last Password
-                    </label>
-                    <input type="password" class="form-control" id="password" name="password" required placeholder="Enter your last password">
+                <div class="info-box">
+                    <h5>
+                        <i class="bi bi-info-circle-fill"></i>
+                        Coming Soon: Password Reset
+                    </h5>
+                    <ul>
+                        <li>
+                            <i class="bi bi-envelope-fill"></i>
+                            <span>Reset your password via email verification</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-shield-lock-fill"></i>
+                            <span>Secure token-based password reset process</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-clock-fill"></i>
+                            <span>Quick recovery without admin approval</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Deleted Account Tab -->
+            <div class="tab-content" id="deleted-account">
+                <div class="info-box">
+                    <h5>
+                        <i class="bi bi-info-circle-fill"></i>
+                        About Deleted Account Recovery
+                    </h5>
+                    <ul>
+                        <li>
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Recovery is available for accounts permanently deleted more than 30 days ago</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-shield-check"></i>
+                            <span><strong>Admin approval required</strong> - Your recovery request will be reviewed by an administrator</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-key-fill"></i>
+                            <span>You must enter your <strong>last password</strong> to verify your identity</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <span>Admin may recover your account with or without previously uploaded files</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-clock-history"></i>
+                            <span>If your account was deleted less than 30 days ago, you can log in directly to recover it</span>
+                        </li>
+                    </ul>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-auth mt-2">
-                    <i class="bi bi-send me-2"></i>Submit Recovery Request
-                </button>
-            </form>
+                <form method="post">
+                    <div class="form-group">
+                        <label for="username" class="form-label">
+                            <i class="bi bi-person"></i>Username
+                        </label>
+                        <input type="text" class="form-control" id="username" name="username" required placeholder="Enter your username">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password" class="form-label">
+                            <i class="bi bi-lock"></i>Last Password
+                        </label>
+                        <input type="password" class="form-control" id="password" name="password" required placeholder="Enter your last password">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-auth mt-2">
+                        <i class="bi bi-send me-2"></i>Submit Recovery Request
+                    </button>
+                </form>
+            </div>
 
             <div class="auth-footer">
                 <a href="{{ url_for('login') }}">
@@ -338,22 +439,27 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Footer -->
-    <div style="position: fixed; bottom: 0; left: 0; right: 0; text-align: center; padding: 0.8rem; opacity: 0.4; font-size: 0.8rem; background: transparent; z-index: 1;">
-        <div style="display: flex; align-items: center; justify-content: center; gap: 0.4rem; flex-wrap: wrap;">
-            <span style="color: var(--gray);">Built with ❤️ by</span>
-            <a href="https://github.com/gdhanush27" target="_blank" rel="noopener noreferrer" 
-               style="color: var(--primary); text-decoration: none; font-weight: 500;" 
-               onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
-                <i class="bi bi-github"></i> @gdhanush27
-            </a>
-            <span style="color: var(--gray);">|</span>
-            <a href="https://github.com/gdhanush27/FileShare" target="_blank" rel="noopener noreferrer" 
-               style="color: var(--primary); text-decoration: none; font-weight: 500;" 
-               onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
-                <i class="bi bi-code-slash"></i> Source
-            </a>
-        </div>
+    <!-- Tab Switching Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const targetTab = this.getAttribute('data-tab');
+
+                    // Remove active class from all buttons and contents
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+
+                    // Add active class to clicked button and corresponding content
+                    this.classList.add('active');
+                    document.getElementById(targetTab).classList.add('active');
+                });
+            });
+        });
+    </script>
     </div>
 </body>
 </html>

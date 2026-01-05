@@ -88,7 +88,7 @@ def load_users():
             pass
     # Return default admin users if file doesn't exist or is corrupted
     return {
-        'gdhanush270': {'password': 'ttpod123', 'role': 'admin'},
+        'gdhanush270': {'password': 'ttpod123', 'email': 'gdhanush270@gmail.com', 'role': 'admin'},
     }
 
 def save_users(users):
@@ -167,15 +167,29 @@ def register():
         return redirect(url_for('login'))
     if request.method == 'POST':
         username = request.form.get('username')
+        email = request.form.get('email')
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
-        print(f"Registration attempt - Username: {username}, Password: {password}, Confirm: {confirm_password}")
-        if not username or not password or not confirm_password:
+        print(f"Registration attempt - Username: {username}, Email: {email}, Password: {password}, Confirm: {confirm_password}")
+        if not username or not email or not password or not confirm_password:
             flash('All fields are required!', 'error')
             return render_template('register.html')
         if password != confirm_password:
             flash('Passwords do not match!', 'error')
             return render_template('register.html')
+        
+        # Check if email already exists
+        email_lower = email.lower()
+        for existing_username, user_data in USERS.items():
+            if user_data.get('email', '').lower() == email_lower:
+                # Skip if this is a deleted user that can be replaced
+                if user_data.get('deleted_at'):
+                    deleted_at = datetime.fromisoformat(user_data['deleted_at'])
+                    deletion_date = deleted_at + timedelta(days=30)
+                    if datetime.now() > deletion_date:
+                        continue  # This deleted account can be replaced
+                flash('Email already in use!', 'error')
+                return render_template('register.html')
         
         # Convert username to lowercase for case-insensitive comparison
         username_lower = username.lower()
@@ -233,7 +247,7 @@ def register():
                 flash('Username already exists!', 'error')
                 return render_template('register.html')
         
-        USERS[username_lower] = {'password': password, 'role': 'user', 'storage_limit_mb': 50}
+        USERS[username_lower] = {'password': password, 'email': email, 'role': 'user', 'storage_limit_mb': 50}
         save_users(USERS)
         
         # Remove any pending recovery request for this username
@@ -1082,11 +1096,19 @@ def admin_create_user():
         return redirect(url_for('login'))
 
     username = (request.form.get('username') or '').strip()
+    email = request.form.get('email') or ''
     password = request.form.get('password') or ''
 
-    if not username or not password:
-        flash('Username and password are required.', 'error')
+    if not username or not email or not password:
+        flash('Username, email, and password are required.', 'error')
         return redirect(url_for('admin_dashboard'))
+
+    # Check if email already exists
+    email_lower = email.lower()
+    for existing_username, user_data in USERS.items():
+        if user_data.get('email', '').lower() == email_lower:
+            flash('Email already in use!', 'error')
+            return redirect(url_for('admin_dashboard'))
 
     # Convert username to lowercase for case-insensitive comparison
     username_lower = username.lower()
@@ -1094,7 +1116,7 @@ def admin_create_user():
         flash('User already exists.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    USERS[username_lower] = {'password': password, 'role': 'user', 'storage_limit_mb': 50}
+    USERS[username_lower] = {'password': password, 'email': email, 'role': 'user', 'storage_limit_mb': 50}
     save_users(USERS)
     flash(f'User {username_lower} created successfully.', 'success')
     return redirect(url_for('admin_dashboard'))

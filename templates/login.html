@@ -487,7 +487,7 @@
                         Don't have an account? <a href="{{ url_for('register') }}">Register now</a>
                         <br>
                         <span style="margin-top: 0.5rem; display: inline-block; font-size: 0.85rem;">
-                            Account deleted? <a href="{{ url_for('recover') }}">Recover account</a>
+                            <a href="{{ url_for('recover') }}">Recover account</a>
                         </span>
                     </div>
                 </div>
@@ -513,23 +513,5 @@
             sessionStorage.setItem('username', this.value);
         });
     </script>
-
-    <!-- Footer -->
-    <div style="position: fixed; bottom: 0; left: 0; right: 0; text-align: center; padding: 0.8rem; opacity: 0.4; font-size: 0.8rem; background: transparent; z-index: 1;">
-        <div style="display: flex; align-items: center; justify-content: center; gap: 0.4rem; flex-wrap: wrap;">
-            <span style="color: var(--gray);">Built with ❤️ by</span>
-            <a href="https://github.com/gdhanush27" target="_blank" rel="noopener noreferrer" 
-               style="color: var(--primary); text-decoration: none; font-weight: 500;" 
-               onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
-                <i class="bi bi-github"></i> @gdhanush27
-            </a>
-            <span style="color: var(--gray);">|</span>
-            <a href="https://github.com/gdhanush27/FileShare" target="_blank" rel="noopener noreferrer" 
-               style="color: var(--primary); text-decoration: none; font-weight: 500;" 
-               onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
-                <i class="bi bi-code-slash"></i> Source
-            </a>
-        </div>
-    </div>
 </body>
 </html>
