@@ -1,16 +1,19 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash, session
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash, session, send_file
 from flask_session import Session
 from werkzeug.utils import secure_filename
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 import mimetypes
 import json
+from PIL import Image
+import io
 
 app = Flask(__name__)
 app.secret_key = "super-secret"
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'flask_session')
+PROFILE_PICTURES_FOLDER = os.path.join(os.path.dirname(__file__), 'profile_pictures')
 
 # Configure server-side session storage
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -35,6 +38,9 @@ FILES_DB_FILE = os.path.join(os.path.dirname(__file__), 'files_db.json')
 
 # File path for settings storage
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), 'settings.json')
+
+# File path for recovery requests storage
+RECOVERY_REQUESTS_FILE = os.path.join(os.path.dirname(__file__), 'recovery_requests.json')
 
 # In-memory file info storage: {file_id: {filename, path, timestamp}}
 file_db = {}
@@ -111,6 +117,24 @@ def save_files_db(files_db):
     except IOError:
         pass
 
+def load_recovery_requests():
+    """Load recovery requests from JSON file"""
+    if os.path.exists(RECOVERY_REQUESTS_FILE):
+        try:
+            with open(RECOVERY_REQUESTS_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+def save_recovery_requests(requests):
+    """Save recovery requests to JSON file"""
+    try:
+        with open(RECOVERY_REQUESTS_FILE, 'w') as f:
+            json.dump(requests, f, indent=2)
+    except IOError:
+        pass
+
 # Load settings on startup
 load_settings()
 
@@ -119,6 +143,9 @@ USERS = load_users()
 
 # Load files database on startup
 file_db = load_files_db()
+
+# Load recovery requests on startup
+recovery_requests = load_recovery_requests()
 
 # Application name (pulled from settings)
 APP_NAME = SETTINGS.get('app_name', 'FileShare Pro')
@@ -153,17 +180,116 @@ def register():
         # Convert username to lowercase for case-insensitive comparison
         username_lower = username.lower()
         if username_lower in USERS:
-            flash('Username already exists!', 'error')
-            return render_template('register.html')
+            # Check if user was deleted and 30 days have passed
+            existing_user = USERS[username_lower]
+            if existing_user.get('deleted_at'):
+                deleted_at = datetime.fromisoformat(existing_user['deleted_at'])
+                deletion_date = deleted_at + timedelta(days=30)
+                
+                # If 30 days have passed, delete old account and create new one
+                if datetime.now() > deletion_date:
+                    # Delete old user's profile picture if exists
+                    if existing_user.get('profile_picture'):
+                        old_pic_path = os.path.join(PROFILE_PICTURES_FOLDER, existing_user['profile_picture'])
+                        if os.path.exists(old_pic_path):
+                            try:
+                                os.remove(old_pic_path)
+                            except:
+                                pass
+                    
+                    # Delete old user's files
+                    ids_to_delete = []
+                    for fid, info in list(file_db.items()):
+                        if info.get('owner') == username_lower:
+                            ids_to_delete.append(fid)
+                    
+                    for fid in ids_to_delete:
+                        info = file_db.get(fid)
+                        if info:
+                            if info.get('is_bundle'):
+                                for child_id in info.get('files', []):
+                                    child_info = file_db.get(child_id)
+                                    if child_info and os.path.exists(child_info['path']):
+                                        try:
+                                            os.remove(child_info['path'])
+                                        except:
+                                            pass
+                                    file_db.pop(child_id, None)
+                                file_db.pop(fid, None)
+                            else:
+                                if os.path.exists(info['path']):
+                                    try:
+                                        os.remove(info['path'])
+                                    except:
+                                        pass
+                                file_db.pop(fid, None)
+                    
+                    save_files_db(file_db)
+                    # Now create new user (continue below)
+                else:
+                    flash('Username already exists!', 'error')
+                    return render_template('register.html')
+            else:
+                flash('Username already exists!', 'error')
+                return render_template('register.html')
         
         USERS[username_lower] = {'password': password, 'role': 'user', 'storage_limit_mb': 50}
         save_users(USERS)
+        
+        # Remove any pending recovery request for this username
+        if username_lower in recovery_requests:
+            recovery_requests.pop(username_lower, None)
+            save_recovery_requests(recovery_requests)
+        
         print(f"User registered successfully: {username_lower}")
         print(f"Current users: {list(USERS.keys())}")
         flash('Registration successful! Please log in.', 'success')
         return redirect(url_for('login'))
     print("Returning register.html template")
     return render_template('register.html', APP_NAME=APP_NAME)
+
+@app.route('/recover', methods=['GET', 'POST'])
+def recover():
+    """Recovery page for permanently deleted accounts (>30 days)"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not username or not password:
+            flash('Username and password are required!', 'error')
+            return render_template('recover.html', APP_NAME=APP_NAME)
+        
+        # Convert username to lowercase
+        username_lower = username.lower()
+        user = USERS.get(username_lower)
+        
+        # Always show the same message for security (prevent username enumeration)
+        # Only process if credentials are correct
+        should_process = False
+        
+        if user and user['password'] == password and user.get('deleted_at'):
+            deleted_at = datetime.fromisoformat(user['deleted_at'])
+            deletion_date = deleted_at + timedelta(days=30)
+            
+            # Only process if 30 days have passed and no existing request
+            if datetime.now() > deletion_date and username_lower not in recovery_requests:
+                should_process = True
+        
+        # Process the recovery request if credentials are correct
+        if should_process:
+            recovery_requests[username_lower] = {
+                'username': username_lower,
+                'requested_at': datetime.now().isoformat(),
+                'deleted_at': user['deleted_at'],
+                'role': user.get('role', 'user')
+            }
+            save_recovery_requests(recovery_requests)
+        
+        # Always show the same message regardless of success
+        flash('Request will be sent if the credentials are correct.', 'info')
+        return redirect(url_for('login'))
+    
+    return render_template('recover.html', APP_NAME=APP_NAME)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -177,6 +303,22 @@ def login():
         user = USERS.get(username_lower)
         print(f"User found: {user}")
         if user and user['password'] == password:
+            # Check if account is marked for deletion
+            if user.get('deleted_at'):
+                deleted_at = datetime.fromisoformat(user['deleted_at'])
+                deletion_date = deleted_at + timedelta(days=30)
+                
+                # Check if 30 days have passed
+                if datetime.now() > deletion_date:
+                    flash('Your account has been permanently deleted. Visit the recovery page to restore your account.', 'error')
+                    return render_template('login.html', APP_NAME=APP_NAME)
+                else:
+                    # Account is scheduled for deletion, allow login to recover
+                    session['username'] = username_lower
+                    session['role'] = user['role']
+                    flash(f'Your account is scheduled for deletion on {deletion_date.strftime("%B %d, %Y")}. Visit your profile to recover it.', 'error')
+                    return redirect(url_for('index'))
+            
             session['username'] = username_lower
             session['role'] = user['role']
             print(f"Login successful for: {username_lower}")
@@ -305,7 +447,243 @@ def profile(username):
         'storage_percentage': round(storage_percentage, 1)
     }
     
-    return render_template('profile.html', user_info=user_info, username=username, storage_info=storage_info, is_own_profile=is_own_profile, storage_visible=storage_visible, APP_NAME=APP_NAME)
+    # Add deletion info if account is marked for deletion
+    if user_info.get('deleted_at'):
+        deleted_at = datetime.fromisoformat(user_info['deleted_at'])
+        deletion_date = deleted_at + timedelta(days=30)
+        user_info['deletion_date'] = deletion_date.strftime('%B %d, %Y')
+    
+    return render_template('profile.html', user_info=user_info, username=username, storage_info=storage_info, is_own_profile=is_own_profile, storage_visible=storage_visible, APP_NAME=APP_NAME, is_admin=is_admin(session.get('username', '')))
+
+@app.route('/u/<username>/upload_profile_picture', methods=['POST'])
+def upload_profile_picture(username):
+    # Check if user is logged in and viewing own profile
+    if 'username' not in session:
+        flash('Please login to upload a profile picture!', 'error')
+        return redirect(url_for('login'))
+    
+    if session['username'] != username:
+        flash('You can only change your own profile picture!', 'error')
+        return redirect(url_for('profile', username=username))
+    
+    if 'profile_picture' not in request.files:
+        flash('No file selected!', 'error')
+        return redirect(url_for('profile', username=username))
+    
+    file = request.files['profile_picture']
+    
+    if file.filename == '':
+        flash('No file selected!', 'error')
+        return redirect(url_for('profile', username=username))
+    
+    # Check if file is an image
+    mime_type, _ = mimetypes.guess_type(file.filename)
+    if not mime_type or not mime_type.startswith('image/'):
+        flash('Only image files are allowed for profile pictures!', 'error')
+        return redirect(url_for('profile', username=username))
+    
+    # Save the profile picture
+    try:
+        # Remove old profile picture if exists
+        user = USERS.get(username)
+        if user and user.get('profile_picture'):
+            old_pic_path = os.path.join(PROFILE_PICTURES_FOLDER, user['profile_picture'])
+            if os.path.exists(old_pic_path):
+                try:
+                    os.remove(old_pic_path)
+                except:
+                    pass
+        
+        # Generate unique filename
+        file_ext = os.path.splitext(file.filename)[1]
+        unique_filename = f"{username}_{uuid.uuid4().hex}{file_ext}"
+        file_path = os.path.join(PROFILE_PICTURES_FOLDER, unique_filename)
+        
+        # Save and resize the image
+        img = Image.open(file.stream)
+        # Convert RGBA to RGB if necessary
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        
+        # Resize to 300x300 (profile picture standard size)
+        img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+        img.save(file_path, 'JPEG', quality=85, optimize=True)
+        
+        # Update user record
+        USERS[username]['profile_picture'] = unique_filename
+        save_users(USERS)
+        
+        flash('Profile picture updated successfully!', 'success')
+    except Exception as e:
+        flash(f'Error uploading profile picture: {str(e)}', 'error')
+    
+    return redirect(url_for('profile', username=username))
+
+@app.route('/u/<username>/delete_profile_picture', methods=['POST'])
+def delete_profile_picture(username):
+    """Delete user's profile picture"""
+    # Check if user is logged in and viewing own profile
+    if 'username' not in session:
+        flash('Please login to delete your profile picture!', 'error')
+        return redirect(url_for('login'))
+    
+    if session['username'] != username:
+        flash('You can only delete your own profile picture!', 'error')
+        return redirect(url_for('profile', username=username))
+    
+    user = USERS.get(username)
+    if user and user.get('profile_picture'):
+        # Delete the file
+        pic_path = os.path.join(PROFILE_PICTURES_FOLDER, user['profile_picture'])
+        if os.path.exists(pic_path):
+            try:
+                os.remove(pic_path)
+            except Exception as e:
+                flash(f'Error deleting profile picture file: {str(e)}', 'error')
+                return redirect(url_for('profile', username=username))
+        
+        # Remove from user record
+        user['profile_picture'] = None
+        save_users(USERS)
+        flash('Profile picture deleted successfully!', 'success')
+    else:
+        flash('No profile picture to delete!', 'error')
+    
+    return redirect(url_for('profile', username=username))
+
+@app.route('/u/<username>/request_deletion', methods=['POST'])
+def request_account_deletion(username):
+    """Mark account for deletion with 30-day grace period"""
+    if 'username' not in session:
+        flash('Please login to delete your account!', 'error')
+        return redirect(url_for('login'))
+    
+    if session['username'] != username:
+        flash('You can only delete your own account!', 'error')
+        return redirect(url_for('profile', username=username))
+    
+    # Check if user is admin - prevent admin from self-deletion
+    if is_admin(username):
+        flash('Admin accounts cannot be deleted. Please contact another administrator.', 'error')
+        return redirect(url_for('profile', username=username))
+    
+    user = USERS.get(username)
+    if user:
+        # Mark account for deletion
+        user['deleted_at'] = datetime.now().isoformat()
+        save_users(USERS)
+        
+        # Log out the user
+        session.pop('username', None)
+        session.pop('role', None)
+        
+        deletion_date = (datetime.now() + timedelta(days=30)).strftime('%B %d, %Y')
+        flash(f'Your account has been scheduled for deletion on {deletion_date}. You can recover it anytime before then by logging in.', 'success')
+        return redirect(url_for('login'))
+    
+    flash('Account not found!', 'error')
+    return redirect(url_for('login'))
+
+@app.route('/u/<username>/recover', methods=['POST'])
+def recover_account(username):
+    """Recover account from deletion"""
+    if 'username' not in session:
+        flash('Please login to recover your account!', 'error')
+        return redirect(url_for('login'))
+    
+    if session['username'] != username:
+        flash('You can only recover your own account!', 'error')
+        return redirect(url_for('profile', username=username))
+    
+    user = USERS.get(username)
+    if user and user.get('deleted_at'):
+        # Check if 30 days have passed
+        deleted_at = datetime.fromisoformat(user['deleted_at'])
+        deletion_date = deleted_at + timedelta(days=30)
+        
+        if datetime.now() > deletion_date:
+            flash('The recovery period has expired. Your account cannot be recovered.', 'error')
+            session.pop('username', None)
+            session.pop('role', None)
+            return redirect(url_for('login'))
+        
+        # Recover account
+        user['deleted_at'] = None
+        save_users(USERS)
+        flash('Your account has been successfully recovered!', 'success')
+    else:
+        flash('Account not found or not scheduled for deletion!', 'error')
+    
+    return redirect(url_for('profile', username=username))
+
+@app.route('/profile_picture/<username>')
+def get_profile_picture(username):
+    """Serve profile picture for a user"""
+    user = USERS.get(username)
+    if user and user.get('profile_picture'):
+        pic_path = os.path.join(PROFILE_PICTURES_FOLDER, user['profile_picture'])
+        if os.path.exists(pic_path):
+            return send_from_directory(PROFILE_PICTURES_FOLDER, user['profile_picture'])
+    
+    # Return default avatar (we'll use a placeholder)
+    return '', 404
+
+@app.route('/preview/<file_id>')
+def preview_image(file_id):
+    """Generate and serve a low-resolution preview for images over 300KB"""
+    file_info = file_db.get(file_id)
+    if not file_info:
+        return 'File not found', 404
+    
+    file_path = file_info.get('path')
+    if not file_path or not os.path.exists(file_path):
+        return 'File not found', 404
+    
+    # Check if it's an image
+    mime_type, _ = mimetypes.guess_type(file_info.get('filename', ''))
+    if not mime_type or not mime_type.startswith('image/'):
+        return 'Not an image', 400
+    
+    # Check file size
+    file_size = os.path.getsize(file_path)
+    size_kb = file_size / 1024
+    
+    # If file is less than 300KB, serve original
+    if size_kb < 300:
+        return send_file(file_path, mimetype=mime_type)
+    
+    # Generate low-res preview
+    try:
+        img = Image.open(file_path)
+        
+        # Create a thumbnail (max 800x800 for preview)
+        img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+        
+        # Save to BytesIO object
+        img_io = io.BytesIO()
+        
+        # Determine format
+        img_format = 'JPEG'
+        if mime_type == 'image/png':
+            img_format = 'PNG'
+        elif mime_type == 'image/gif':
+            img_format = 'GIF'
+        
+        # Convert RGBA to RGB for JPEG
+        if img_format == 'JPEG' and img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[-1] if img.mode in ('RGBA', 'LA') else None)
+            img = background
+        
+        img.save(img_io, img_format, quality=70, optimize=True)
+        img_io.seek(0)
+        
+        return send_file(img_io, mimetype=mime_type)
+    except Exception as e:
+        # If preview generation fails, serve original
+        return send_file(file_path, mimetype=mime_type)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -444,6 +822,7 @@ def file_page(file_id):
     file_size = None
     file_type = None
     is_image = False
+    size_bytes = 0
     if file_info and os.path.exists(file_info['path']):
         size_bytes = os.path.getsize(file_info['path'])
         if size_bytes < 1024:
@@ -469,7 +848,7 @@ def file_page(file_id):
                 file_type = mime
         else:
             file_type = 'Unknown'
-    return render_template('file.html', file_info=file_info, file_id=file_id, file_size=file_size, file_type=file_type, is_image=is_image, APP_NAME=APP_NAME, session=session, is_admin=is_admin(session.get('username', '')))
+    return render_template('file.html', file_info=file_info, file_id=file_id, file_size=file_size, size_bytes=size_bytes, file_type=file_type, is_image=is_image, APP_NAME=APP_NAME, session=session, is_admin=is_admin(session.get('username', '')))
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
@@ -655,6 +1034,20 @@ def admin_dashboard():
     remaining_storage = MAX_STORAGE_BYTES - total_storage_used
     remaining_storage_formatted = format_bytes(remaining_storage)
 
+    # Get permanently deleted accounts (deleted_at > 30 days ago)
+    permanently_deleted_users = []
+    for uname, udata in USERS.items():
+        if udata.get('deleted_at'):
+            deleted_at = datetime.fromisoformat(udata['deleted_at'])
+            deletion_date = deleted_at + timedelta(days=30)
+            if datetime.now() > deletion_date:
+                permanently_deleted_users.append({
+                    'username': uname,
+                    'deleted_at': deleted_at.strftime('%B %d, %Y'),
+                    'days_ago': (datetime.now() - deleted_at).days,
+                    'role': udata.get('role', 'user')
+                })
+
     # Prepare data for charts
     dashboard_data = {
         'total_files': len([f for f in file_db.values() if not f.get('is_bundle')]),
@@ -668,7 +1061,9 @@ def admin_dashboard():
         'user_storage_usage': {k: format_bytes(v) for k, v in user_storage_usage.items()},
         'user_storage_bytes': user_storage_usage,
         'files_by_date': dict(sorted(files_by_date.items())),
-        'max_storage_mb': MAX_STORAGE_MB
+        'max_storage_mb': MAX_STORAGE_MB,
+        'permanently_deleted_users': permanently_deleted_users,
+        'recovery_requests': recovery_requests
     }
 
     return render_template('admin_dashboard.html', data=dashboard_data, SETTINGS=SETTINGS, USERS=USERS, APP_NAME=APP_NAME)
@@ -819,6 +1214,123 @@ def admin_delete_user():
     flash(f'User {username} and their files were removed.', 'success')
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/approve_recovery', methods=['POST'])
+def admin_approve_recovery():
+    """Admin route to approve recovery request"""
+    if not _require_admin():
+        return redirect(url_for('login'))
+
+    username = (request.form.get('username') or '').strip()
+    with_files = request.form.get('with_files', 'false').lower() == 'true'
+
+    if not username:
+        flash('Username is required.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    # Convert username to lowercase
+    username_lower = username.lower()
+    
+    # Check if recovery request exists
+    if username_lower not in recovery_requests:
+        flash('Recovery request not found.', 'error')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Check if user exists
+    if username_lower not in USERS:
+        flash('User does not exist.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    user = USERS[username_lower]
+    
+    # Recover the account
+    user['deleted_at'] = None
+    save_users(USERS)
+    
+    # Handle files recovery if requested
+    if with_files:
+        # Note: Files were already deleted when account was deleted >30 days ago
+        # This is just for future enhancement if files are kept
+        flash(f'Account {username_lower} has been successfully recovered with file recovery attempted!', 'success')
+    else:
+        flash(f'Account {username_lower} has been successfully recovered without files!', 'success')
+    
+    # Remove the recovery request
+    recovery_requests.pop(username_lower, None)
+    save_recovery_requests(recovery_requests)
+    
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/deny_recovery', methods=['POST'])
+def admin_deny_recovery():
+    """Admin route to deny recovery request"""
+    if not _require_admin():
+        return redirect(url_for('login'))
+
+    username = (request.form.get('username') or '').strip()
+
+    if not username:
+        flash('Username is required.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    # Convert username to lowercase
+    username_lower = username.lower()
+    
+    # Check if recovery request exists
+    if username_lower not in recovery_requests:
+        flash('Recovery request not found.', 'error')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Remove the recovery request
+    recovery_requests.pop(username_lower, None)
+    save_recovery_requests(recovery_requests)
+    
+    flash(f'Recovery request for {username_lower} has been denied.', 'info')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/recover_deleted_user', methods=['POST'])
+def admin_recover_deleted_user():
+    """Admin route to recover permanently deleted accounts"""
+    if not _require_admin():
+        return redirect(url_for('login'))
+
+    username = (request.form.get('username') or '').strip()
+    with_files = request.form.get('with_files', 'false').lower() == 'true'
+
+    if not username:
+        flash('Username is required.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    # Convert username to lowercase for case-insensitive lookup
+    username_lower = username.lower()
+    if username_lower not in USERS:
+        flash('User does not exist.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    user = USERS[username_lower]
+    if not user.get('deleted_at'):
+        flash('User account is not deleted.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    # Check if 30 days have passed
+    deleted_at = datetime.fromisoformat(user['deleted_at'])
+    deletion_date = deleted_at + timedelta(days=30)
+    
+    if datetime.now() <= deletion_date:
+        flash('User is still in the 30-day recovery period. They can recover their own account.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    # Recover the account
+    user['deleted_at'] = None
+    save_users(USERS)
+    
+    # Handle files recovery message
+    if with_files:
+        flash(f'Account {username_lower} has been successfully recovered with file recovery attempted!', 'success')
+    else:
+        flash(f'Account {username_lower} has been successfully recovered without files!', 'success')
+    
+    return redirect(url_for('admin_dashboard'))
+
 @app.errorhandler(413)
 def file_too_large(e):
     flash('File is too large. Maximum allowed size is 40 MB.')
@@ -829,4 +1341,6 @@ if __name__ == '__main__':
         os.makedirs(UPLOAD_FOLDER)
     if not os.path.exists(SESSION_FOLDER):
         os.makedirs(SESSION_FOLDER)
+    if not os.path.exists(PROFILE_PICTURES_FOLDER):
+        os.makedirs(PROFILE_PICTURES_FOLDER)
     app.run(debug=True)

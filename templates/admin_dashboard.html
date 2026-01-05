@@ -559,6 +559,118 @@
                     <input type="hidden" name="storage_limit_mb">
                 </form>
 
+                <!-- Recovery Requests -->
+                {% if data.recovery_requests %}
+                <div class="section-title mt-5">
+                    <i class="bi bi-envelope-exclamation me-2"></i>Account Recovery Requests
+                    <span class="badge bg-warning text-dark ms-2">{{ data.recovery_requests|length }}</span>
+                </div>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Action Required:</strong> These users have requested to recover their permanently deleted accounts.
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Requested On</th>
+                                <th>Deleted On</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for username, request in data.recovery_requests.items() %}
+                            <tr class="table-warning">
+                                <td><strong>{{ username }}</strong></td>
+                                <td>
+                                    <span class="badge {{ 'bg-danger' if request.role == 'admin' else 'bg-primary' }}">
+                                        {{ request.role }}
+                                    </span>
+                                </td>
+                                <td>{{ request.requested_at[:10] }}</td>
+                                <td>{{ request.deleted_at[:10] }}</td>
+                                <td>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-success me-2"
+                                            onclick="approveRecovery('{{ username }}', true)"
+                                            title="Recover with files">
+                                        <i class="bi bi-check-circle me-1"></i>With Files
+                                    </button>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-info me-2"
+                                            onclick="approveRecovery('{{ username }}', false)"
+                                            title="Recover without files">
+                                        <i class="bi bi-check me-1"></i>Without Files
+                                    </button>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-danger"
+                                            onclick="denyRecovery('{{ username }}')"
+                                            title="Deny recovery request">
+                                        <i class="bi bi-x-circle me-1"></i>Deny
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                <!-- Permanently Deleted Accounts Recovery -->
+                {% if data.permanently_deleted_users %}
+                <div class="section-title mt-5">
+                    <i class="bi bi-clock-history me-2"></i>Permanently Deleted Accounts
+                    <span class="badge bg-danger ms-2">{{ data.permanently_deleted_users|length }}</span>
+                </div>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    These accounts were deleted more than 30 days ago and can be recovered by admin.
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Deleted On</th>
+                                <th>Days Ago</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in data.permanently_deleted_users %}
+                            <tr>
+                                <td><strong>{{ user.username }}</strong></td>
+                                <td>
+                                    <span class="badge {{ 'bg-danger' if user.role == 'admin' else 'bg-primary' }}">
+                                        {{ user.role }}
+                                    </span>
+                                </td>
+                                <td>{{ user.deleted_at }}</td>
+                                <td>{{ user.days_ago }} days</td>
+                                <td>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-success me-2"
+                                            onclick="recoverDeletedUser('{{ user.username }}', true)"
+                                            title="Recover with files">
+                                        <i class="bi bi-check-circle me-1"></i>With Files
+                                    </button>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-info"
+                                            onclick="recoverDeletedUser('{{ user.username }}', false)"
+                                            title="Recover without files">
+                                        <i class="bi bi-check me-1"></i>Without Files
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
             </div>
             </div>
             </div>
@@ -571,6 +683,89 @@
     <!-- End of container -->
 
     <!-- Modals -->
+    <!-- Recover Deleted User Modal -->
+    <div class="modal fade" id="recoverDeletedUserModal" tabindex="-1" aria-labelledby="recoverDeletedUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(120deg, #06d6a0, #1be0b0); color: white;">
+                    <h5 class="modal-title" id="recoverDeletedUserModalLabel">
+                        <i class="bi bi-arrow-clockwise me-2"></i>Recover Permanently Deleted Account
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Recover user <strong id="recoverUsername" class="text-success"></strong>?</p>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <span id="recoverDeletedUserMessage"></span>
+                    </div>
+                    <input type="hidden" id="recoverDeletedUserWithFiles" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="submitRecoverDeletedUser()">
+                        <i class="bi bi-arrow-clockwise me-2"></i>Recover Account
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Approve Recovery Modal -->
+    <div class="modal fade" id="approveRecoveryModal" tabindex="-1" aria-labelledby="approveRecoveryModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(120deg, #06d6a0, #1be0b0); color: white;">
+                    <h5 class="modal-title" id="approveRecoveryModalLabel">
+                        <i class="bi bi-check-circle me-2"></i>Approve Recovery Request
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Approve recovery request for user <strong id="approveRecoveryUsername" class="text-success"></strong>?</p>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <span id="approveRecoveryMessage"></span>
+                    </div>
+                    <input type="hidden" id="approveRecoveryWithFiles" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="submitApproveRecovery()">
+                        <i class="bi bi-check-circle me-2"></i>Approve
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deny Recovery Modal -->
+    <div class="modal fade" id="denyRecoveryModal" tabindex="-1" aria-labelledby="denyRecoveryModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="denyRecoveryModalLabel">
+                        <i class="bi bi-x-circle me-2"></i>Deny Recovery Request
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Deny recovery request for user <strong id="denyRecoveryUsername" class="text-danger"></strong>?</p>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        The recovery request will be removed and the user will not be notified.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" onclick="submitDenyRecovery()">
+                        <i class="bi bi-x-circle me-2"></i>Deny Request
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Reset Password Modal -->
     <div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-labelledby="resetPasswordModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -868,6 +1063,136 @@
             } else {
                 alert('Please enter a valid password');
             }
+        }
+
+        // Recover deleted user
+        function recoverDeletedUser(username, withFiles) {
+            document.getElementById('recoverUsername').textContent = username;
+            document.getElementById('recoverDeletedUserWithFiles').value = withFiles;
+            
+            // Update modal message
+            const messageEl = document.getElementById('recoverDeletedUserMessage');
+            if (withFiles) {
+                messageEl.innerHTML = '<strong>Recovery with files:</strong><ul class="mb-0 mt-2"><li>The account and all previously uploaded files will be restored</li><li>User can login immediately with their existing password</li></ul>';
+            } else {
+                messageEl.innerHTML = '<strong>Recovery without files:</strong><ul class="mb-0 mt-2"><li>Only the account will be restored and marked as active</li><li>User can login immediately with their existing password</li><li>Previous files will remain permanently deleted</li></ul>';
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('recoverDeletedUserModal'));
+            modal.show();
+        }
+
+        // Submit recover deleted user
+        function submitRecoverDeletedUser() {
+            const username = document.getElementById('recoverUsername').textContent;
+            const withFiles = document.getElementById('recoverDeletedUserWithFiles').value === 'true';
+            
+            // Create form and submit
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ url_for("admin_recover_deleted_user") }}';
+            
+            const usernameInput = document.createElement('input');
+            usernameInput.type = 'hidden';
+            usernameInput.name = 'username';
+            usernameInput.value = username;
+            
+            const filesInput = document.createElement('input');
+            filesInput.type = 'hidden';
+            filesInput.name = 'with_files';
+            filesInput.value = withFiles;
+            
+            form.appendChild(usernameInput);
+            form.appendChild(filesInput);
+            document.body.appendChild(form);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('recoverDeletedUserModal'));
+            modal.hide();
+            
+            // Submit form
+            form.submit();
+        }
+
+        // Approve recovery request
+        function approveRecovery(username, withFiles) {
+            document.getElementById('approveRecoveryUsername').textContent = username;
+            document.getElementById('approveRecoveryWithFiles').value = withFiles;
+            
+            // Update modal message
+            const messageEl = document.getElementById('approveRecoveryMessage');
+            if (withFiles) {
+                messageEl.innerHTML = '<strong>Recovery with files:</strong> The account and all previously uploaded files will be restored.';
+            } else {
+                messageEl.innerHTML = '<strong>Recovery without files:</strong> Only the account will be restored. All previously uploaded files will remain permanently deleted.';
+            }
+            
+            const modal = new bootstrap.Modal(document.getElementById('approveRecoveryModal'));
+            modal.show();
+        }
+
+        // Submit approve recovery
+        function submitApproveRecovery() {
+            const username = document.getElementById('approveRecoveryUsername').textContent;
+            const withFiles = document.getElementById('approveRecoveryWithFiles').value === 'true';
+            
+            // Create form and submit
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ url_for("admin_approve_recovery") }}';
+            
+            const usernameInput = document.createElement('input');
+            usernameInput.type = 'hidden';
+            usernameInput.name = 'username';
+            usernameInput.value = username;
+            
+            const filesInput = document.createElement('input');
+            filesInput.type = 'hidden';
+            filesInput.name = 'with_files';
+            filesInput.value = withFiles;
+            
+            form.appendChild(usernameInput);
+            form.appendChild(filesInput);
+            document.body.appendChild(form);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('approveRecoveryModal'));
+            modal.hide();
+            
+            // Submit form
+            form.submit();
+        }
+
+        // Deny recovery request
+        function denyRecovery(username) {
+            document.getElementById('denyRecoveryUsername').textContent = username;
+            const modal = new bootstrap.Modal(document.getElementById('denyRecoveryModal'));
+            modal.show();
+        }
+
+        // Submit deny recovery
+        function submitDenyRecovery() {
+            const username = document.getElementById('denyRecoveryUsername').textContent;
+            
+            // Create form and submit
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ url_for("admin_deny_recovery") }}';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'username';
+            input.value = username;
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('denyRecoveryModal'));
+            modal.hide();
+            
+            // Submit form
+            form.submit();
         }
 
         // Delete user from form
