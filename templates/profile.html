@@ -498,6 +498,10 @@
                         <span class="info-value">{{ username }}</span>
                     </div>
                     <div class="info-item">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">{{ user_info.email }}</span>
+                    </div>
+                    <div class="info-item">
                         <span class="info-label">Role:</span>
                         <span class="role-badge {{ 'role-admin' if user_info.role == 'admin' else 'role-user' }}">
                             {{ user_info.role }}
@@ -594,11 +598,36 @@
                 </div>
                 {% endif %}
 
-                <!-- Change Password Form - Only for own profile -->
+                <!-- Change Email Form - Only for own profile -->
                 {% if is_own_profile %}
+                <div class="form-section">
+                    <h5><i class="bi bi-envelope-fill"></i> Change Email</h5>
+                    <form method="POST" action="{{ url_for('profile', username=username) }}">
+                        <input type="hidden" name="action" value="change_email">
+                        <div class="mb-3">
+                            <label for="new_email" class="form-label">New Email</label>
+                            <input type="email" class="form-control" id="new_email" name="new_email" value="{{ user_info.email }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="email_password" class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" id="email_password" name="email_password" required>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Update Email
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="location.href='{{ url_for('index') }}';">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <br>
+                <!-- Change Password Form - Only for own profile -->
                 <div class="form-section">
                     <h5><i class="bi bi-key-fill"></i> Change Password</h5>
                     <form method="POST" action="{{ url_for('profile', username=username) }}">
+                        <input type="hidden" name="action" value="change_password">
                         <div class="mb-3">
                             <label for="current_password" class="form-label">Current Password</label>
                             <input type="password" class="form-control" id="current_password" name="current_password" required>
@@ -621,7 +650,7 @@
                         </div>
                     </form>
                 </div>
-
+                <br>
                 <!-- Danger Zone - Delete Account -->
                 <div class="form-section" style="border: 2px solid var(--danger);">
                     <h5 style="color: var(--danger);"><i class="bi bi-exclamation-triangle-fill"></i> Danger Zone</h5>
@@ -739,14 +768,18 @@
                         <li>You can recover your account within 30 days</li>
                         <li>After 30 days, your account and all data will be permanently deleted</li>
                     </ul>
+                    <form method="POST" action="{{ url_for('request_account_deletion', username=username) }}" id="deleteAccountForm">
+                        <div class="mb-3">
+                            <label for="delete_password" class="form-label"><strong>Confirm your password:</strong></label>
+                            <input type="password" class="form-control" id="delete_password" name="delete_password" required placeholder="Enter your password to confirm">
+                        </div>
+                    </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <form method="POST" action="{{ url_for('request_account_deletion', username=username) }}" style="display: inline;">
-                        <button type="submit" class="btn btn-danger">
-                            <i class="bi bi-trash"></i> Delete My Account
-                        </button>
-                    </form>
+                    <button type="submit" form="deleteAccountForm" class="btn btn-danger">
+                        <i class="bi bi-trash"></i> Delete My Account
+                    </button>
                 </div>
             </div>
         </div>

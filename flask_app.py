@@ -368,9 +368,9 @@ def profile(username):
             flash('Please login to change your password!', 'error')
             return redirect(url_for('login'))
         
-        # Only allow password change for own profile
+        # Only allow changes for own profile
         if not is_own_profile:
-            flash('You can only change your own password!', 'error')
+            flash('You can only modify your own profile!', 'error')
             return redirect(url_for('profile', username=username))
         
         # Handle storage visibility toggle
@@ -382,6 +382,37 @@ def profile(username):
             flash(f"Storage visibility set to {'public' if user['storage_public'] else 'private'}!", 'success')
             return redirect(url_for('profile', username=username))
         
+        # Handle email change
+        action = request.form.get('action')
+        if action == 'change_email':
+            new_email = request.form.get('new_email', '').strip()
+            email_password = request.form.get('email_password')
+            
+            # Validate inputs
+            if not new_email or not email_password:
+                flash('All fields are required!', 'error')
+                return redirect(url_for('profile', username=username))
+            
+            # Check password
+            user = USERS.get(username)
+            if not user or user['password'] != email_password:
+                flash('Password is incorrect!', 'error')
+                return redirect(url_for('profile', username=username))
+            
+            # Check if email already exists
+            email_lower = new_email.lower()
+            for existing_username, user_data in USERS.items():
+                if existing_username != username and user_data.get('email', '').lower() == email_lower:
+                    flash('Email already in use by another account!', 'error')
+                    return redirect(url_for('profile', username=username))
+            
+            # Update email
+            USERS[username]['email'] = new_email
+            save_users(USERS)
+            flash('Email changed successfully!', 'success')
+            return redirect(url_for('profile', username=username))
+        
+        # Handle password change
         current_password = request.form.get('current_password')
         new_password = request.form.get('new_password')
         confirm_password = request.form.get('confirm_password')
@@ -583,21 +614,32 @@ def request_account_deletion(username):
         flash('Admin accounts cannot be deleted. Please contact another administrator.', 'error')
         return redirect(url_for('profile', username=username))
     
+    # Get and verify password
+    delete_password = request.form.get('delete_password')
+    if not delete_password:
+        flash('Password is required to delete your account!', 'error')
+        return redirect(url_for('profile', username=username))
+    
     user = USERS.get(username)
-    if user:
-        # Mark account for deletion
-        user['deleted_at'] = datetime.now().isoformat()
-        save_users(USERS)
-        
-        # Log out the user
-        session.pop('username', None)
-        session.pop('role', None)
-        
-        deletion_date = (datetime.now() + timedelta(days=30)).strftime('%B %d, %Y')
-        flash(f'Your account has been scheduled for deletion on {deletion_date}. You can recover it anytime before then by logging in.', 'success')
+    if not user:
+        flash('Account not found!', 'error')
         return redirect(url_for('login'))
     
-    flash('Account not found!', 'error')
+    # Verify password
+    if user['password'] != delete_password:
+        flash('Incorrect password! Account deletion cancelled.', 'error')
+        return redirect(url_for('profile', username=username))
+    
+    # Mark account for deletion
+    user['deleted_at'] = datetime.now().isoformat()
+    save_users(USERS)
+    
+    # Log out the user
+    session.pop('username', None)
+    session.pop('role', None)
+    
+    deletion_date = (datetime.now() + timedelta(days=30)).strftime('%B %d, %Y')
+    flash(f'Your account has been scheduled for deletion on {deletion_date}. You can recover it anytime before then by logging in.', 'success')
     return redirect(url_for('login'))
 
 @app.route('/u/<username>/recover', methods=['POST'])
