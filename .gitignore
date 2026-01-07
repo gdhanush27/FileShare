@@ -2,3 +2,9 @@ flask_session/*
 uploads/*
 files_db.json
 users.json
+.env
+__pycache__/
+*.pyc
+settings.json
+config.py
+recovery_requests.json

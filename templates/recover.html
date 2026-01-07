@@ -339,7 +339,6 @@
                 <div class="d-flex">
                     <button type="button" class="tab-btn active" data-tab="forgot-password">
                         <i class="bi bi-key me-2"></i>Forgot Password
-                        <span class="dev-badge">UNDER DEV</span>
                     </button>
                     <button type="button" class="tab-btn" data-tab="deleted-account">
                         <i class="bi bi-arrow-counterclockwise me-2"></i>Deleted Account
@@ -349,21 +348,15 @@
 
             <!-- Forgot Password Tab -->
             <div class="tab-content active" id="forgot-password">
-                <div class="alert alert-info">
-                    <i class="bi bi-tools me-2"></i>
-                    <strong>Feature Under Development</strong><br>
-                    Password reset functionality is currently being developed. Please check back later or contact the administrator for assistance.
-                </div>
-
                 <div class="info-box">
                     <h5>
                         <i class="bi bi-info-circle-fill"></i>
-                        Coming Soon: Password Reset
+                        Password Reset via Email
                     </h5>
                     <ul>
                         <li>
                             <i class="bi bi-envelope-fill"></i>
-                            <span>Reset your password via email verification</span>
+                            <span>We'll send a password reset link to your registered email address</span>
                         </li>
                         <li>
                             <i class="bi bi-shield-lock-fill"></i>
@@ -371,9 +364,33 @@
                         </li>
                         <li>
                             <i class="bi bi-clock-fill"></i>
-                            <span>Quick recovery without admin approval</span>
+                            <span>Reset link expires in 1 hour for your security</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>No admin approval required - instant recovery</span>
                         </li>
                     </ul>
+                </div>
+
+                <form method="post" action="{{ url_for('forgot_password') }}">
+                    <div class="form-group">
+                        <label for="email" class="form-label">
+                            <i class="bi bi-envelope"></i>Email Address
+                        </label>
+                        <input type="email" class="form-control" id="email" name="email" required placeholder="Enter your registered email">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-auth mt-2">
+                        <i class="bi bi-send me-2"></i>Send Reset Link
+                    </button>
+                </form>
+
+                <div class="auth-footer" style="margin-top: 1rem; font-size: 0.95rem;">
+                    <p style="color: var(--gray);">
+                        <i class="bi bi-info-circle"></i> 
+                        You'll receive an email with instructions to reset your password.
+                    </p>
                 </div>
             </div>
 

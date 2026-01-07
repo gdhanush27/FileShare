@@ -541,18 +541,28 @@
                 <h2 class="upload-title">Upload a File</h2>
             </div>
 
-            <form method="post" enctype="multipart/form-data" onsubmit="showUploadingAnimation()">
+            {% if not email_verified %}
+            <div class="alert alert-warning" style="border-radius: 8px; margin-bottom: 20px;">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>Email not verified!</strong> You must verify your email before uploading files.
+                <a href="{{ url_for('profile', username=username) }}" class="btn btn-sm btn-warning" style="margin-left: 10px;">
+                    <i class="bi bi-person-circle"></i> Go to Profile
+                </a>
+            </div>
+            {% endif %}
+
+            <form method="post" enctype="multipart/form-data" onsubmit="{% if not email_verified %}event.preventDefault(); alert('Please verify your email first!'); return false;{% else %}showUploadingAnimation(){% endif %}">
                 <div class="file-input-container">
                     <i class="bi bi-file-earmark-plus"></i>
                     <label class="file-input-label">Choose files or drag them here</label>
                     <p class="file-input-hint">Max file size: 40MB each | Max 5 files</p>
-                    <input type="file" class="form-control" name="files" multiple required onchange="updateFileList()">
+                    <input type="file" class="form-control" name="files" multiple required onchange="updateFileList()" {% if not email_verified %}disabled{% endif %}>
                 </div>
                 <div id="selected-files" class="selected-files-container" style="display: none;">
                     <h6>Selected Files:</h6>
                     <ul id="file-list" class="list-group"></ul>
                 </div>
-                <button class="btn btn-primary w-100" type="submit" id="upload-btn">
+                <button class="btn btn-primary w-100" type="submit" id="upload-btn" {% if not email_verified %}disabled{% endif %}>
                     <i class="bi bi-upload me-2"></i>Upload Files
                 </button>
             </form>

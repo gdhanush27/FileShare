@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash, session, send_file
 from flask_session import Session
+from flask_mail import Mail, Message
 from werkzeug.utils import secure_filename
 import os
 import uuid
@@ -8,12 +9,20 @@ import mimetypes
 import json
 from PIL import Image
 import io
+import secrets
+import config
 
 app = Flask(__name__)
 app.secret_key = "super-secret"
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'flask_session')
 PROFILE_PICTURES_FOLDER = os.path.join(os.path.dirname(__file__), 'profile_pictures')
+
+# Configure Flask-Mail from config.py
+mail_config = config.get_mail_config()
+app.config.update(mail_config)
+
+mail = Mail(app)
 
 # Configure server-side session storage
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -55,7 +64,15 @@ SETTINGS = {
     'max_files_per_bundle': 5,
     'registration_open': True,
     'total_server_storage_mb': 500,  # Total server storage in MB (100 GB)
-    'user_storage_limit_mb': 50  # User storage limit in MB (applies to all users)
+    'user_storage_limit_mb': 50,  # User storage limit in MB (applies to all users)
+    'email': {
+        'MAIL_SERVER': 'smtp.zoho.in',
+        'MAIL_PORT': 587,
+        'MAIL_USE_TLS': True,
+        'MAIL_USERNAME': 'filesharepro@zohomail.in',
+        'MAIL_PASSWORD': 'GMs559sTUX5N',
+        'MAIL_DEFAULT_SENDER': 'filesharepro@zohomail.in'
+    }
 }
 
 def load_settings():
@@ -67,6 +84,9 @@ def load_settings():
                 # Merge with default settings to ensure all keys exist
                 for key, value in loaded_settings.items():
                     SETTINGS[key] = value
+                # Sync email settings with config module
+                if 'email' in SETTINGS:
+                    config.EMAIL_CONFIG = SETTINGS['email']
         except (json.JSONDecodeError, IOError):
             pass
 
@@ -75,6 +95,9 @@ def save_settings():
     try:
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(SETTINGS, f, indent=2)
+        # Also sync email config to config module
+        if 'email' in SETTINGS:
+            config.save_config(SETTINGS['email'])
     except IOError:
         pass
 
@@ -157,6 +180,109 @@ def allowed_file(filename):
     if ALLOWED_EXTENSIONS is None:
         return True
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# Email helper functions
+def send_email(to, subject, html_body):
+    """Send an email using Flask-Mail"""
+    try:
+        # Check if email is configured
+        if not app.config.get('MAIL_PASSWORD'):
+            print("ERROR: MAIL_PASSWORD not configured in .env file")
+            return False
+        
+        print(f"Attempting to send email to: {to}")
+        print(f"MAIL_SERVER: {app.config.get('MAIL_SERVER')}")
+        print(f"MAIL_USERNAME: {app.config.get('MAIL_USERNAME')}")
+        
+        msg = Message(subject, recipients=[to])
+        msg.html = html_body
+        mail.send(msg)
+        print(f"Email sent successfully to: {to}")
+        return True
+    except Exception as e:
+        print(f"ERROR sending email to {to}: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def generate_token():
+    """Generate a secure random token"""
+    return secrets.token_urlsafe(32)
+
+def send_password_reset_email(email, token):
+    """Send password reset email"""
+    reset_url = url_for('reset_password', token=token, _external=True)
+    subject = f"Password Reset Request - {APP_NAME}"
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }}
+            .container {{ background-color: white; padding: 30px; border-radius: 10px; max-width: 600px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+            .header {{ background: linear-gradient(120deg, #4361ee, #7209b7); color: white; padding: 20px; border-radius: 10px 10px 0 0; margin: -30px -30px 20px -30px; }}
+            .btn {{ display: inline-block; padding: 12px 30px; background-color: #4361ee; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+            .footer {{ color: #666; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Password Reset Request</h1>
+            </div>
+            <p>Hello,</p>
+            <p>We received a request to reset your password for your {APP_NAME} account.</p>
+            <p>Click the button below to reset your password:</p>
+            <a href="{reset_url}" class="btn">Reset Password</a>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #4361ee;">{reset_url}</p>
+            <p><strong>This link will expire in 1 hour.</strong></p>
+            <p>If you didn't request this password reset, you can safely ignore this email.</p>
+            <div class="footer">
+                <p>This is an automated email from {APP_NAME}. Please do not reply to this email.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return send_email(email, subject, html_body)
+
+def send_verification_email(email, token, username):
+    """Send email verification email"""
+    verify_url = url_for('verify_email', token=token, _external=True)
+    subject = f"Verify Your Email - {APP_NAME}"
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }}
+            .container {{ background-color: white; padding: 30px; border-radius: 10px; max-width: 600px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+            .header {{ background: linear-gradient(120deg, #4361ee, #7209b7); color: white; padding: 20px; border-radius: 10px 10px 0 0; margin: -30px -30px 20px -30px; }}
+            .btn {{ display: inline-block; padding: 12px 30px; background-color: #06d6a0; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+            .footer {{ color: #666; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Welcome to {APP_NAME}!</h1>
+            </div>
+            <p>Hello {username},</p>
+            <p>Thank you for registering! Please verify your email address to start uploading files.</p>
+            <p>Click the button below to verify your email:</p>
+            <a href="{verify_url}" class="btn">Verify Email</a>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #4361ee;">{verify_url}</p>
+            <p><strong>This link will expire in 24 hours.</strong></p>
+            <div class="footer">
+                <p>This is an automated email from {APP_NAME}. Please do not reply to this email.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return send_email(email, subject, html_body)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -247,10 +373,33 @@ def register():
                 flash('Username already exists!', 'error')
                 return render_template('register.html')
         
-        USERS[username_lower] = {'password': password, 'email': email, 'role': 'user', 'storage_limit_mb': 50}
+        # Create new user with email_verified set to False
+        USERS[username_lower] = {
+            'password': password, 
+            'email': email, 
+            'role': 'user', 
+            'storage_limit_mb': 50,
+            'email_verified': False
+        }
         save_users(USERS)
         
-        # Remove any pending recovery request for this username
+        # Generate verification token
+        token = generate_token()
+        recovery_requests[f"verify_{username_lower}"] = {
+            'type': 'email_verification',
+            'username': username_lower,
+            'token': token,
+            'timestamp': datetime.now().isoformat()
+        }
+        save_recovery_requests(recovery_requests)
+        
+        # Send verification email
+        if send_verification_email(email, token, username):
+            flash('Account created successfully! Please check your email to verify your account.', 'success')
+        else:
+            flash('Account created but failed to send verification email. You can request it again from your profile.', 'warning')
+        
+        # Remove any pending password recovery request for this username
         if username_lower in recovery_requests:
             recovery_requests.pop(username_lower, None)
             save_recovery_requests(recovery_requests)
@@ -350,6 +499,166 @@ def logout():
     session.pop('role', None)
     flash('Logged out successfully!', 'success')
     return redirect(url_for('login'))
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        
+        if not email:
+            flash('Please enter your email address.', 'error')
+            return render_template('forgot_password.html', APP_NAME=APP_NAME)
+        
+        # Find user by email
+        user_found = None
+        username_found = None
+        for username, user_data in USERS.items():
+            if user_data.get('email', '').lower() == email:
+                user_found = user_data
+                username_found = username
+                break
+        
+        # Always show success message for security (prevent email enumeration)
+        if user_found and not user_found.get('deleted_at'):
+            # Generate reset token
+            token = generate_token()
+            recovery_requests[username_found] = {
+                'type': 'password_reset',
+                'username': username_found,
+                'token': token,
+                'timestamp': datetime.now().isoformat()
+            }
+            save_recovery_requests(recovery_requests)
+            
+            # Send reset email
+            send_password_reset_email(email, token)
+        
+        flash('If the email exists in our system, you will receive a password reset link shortly.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('forgot_password.html', APP_NAME=APP_NAME)
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    # Find the reset request by token
+    reset_request = None
+    username = None
+    
+    for key, req in recovery_requests.items():
+        if req.get('type') == 'password_reset' and req.get('token') == token:
+            # Check if token is expired (1 hour)
+            timestamp = datetime.fromisoformat(req['timestamp'])
+            if datetime.now() - timestamp < timedelta(hours=1):
+                reset_request = req
+                username = req['username']
+                break
+    
+    if not reset_request:
+        flash('Invalid or expired reset link. Please request a new one.', 'error')
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        if not password or not confirm_password:
+            flash('All fields are required!', 'error')
+            return render_template('reset_password.html', APP_NAME=APP_NAME, token=token)
+        
+        if password != confirm_password:
+            flash('Passwords do not match!', 'error')
+            return render_template('reset_password.html', APP_NAME=APP_NAME, token=token)
+        
+        # Update password
+        if username in USERS:
+            USERS[username]['password'] = password
+            save_users(USERS)
+            
+            # Remove the reset request
+            recovery_requests.pop(username, None)
+            save_recovery_requests(recovery_requests)
+            
+            flash('Password reset successfully! You can now login with your new password.', 'success')
+            return redirect(url_for('login'))
+        else:
+            flash('User not found!', 'error')
+            return redirect(url_for('login'))
+    
+    return render_template('reset_password.html', APP_NAME=APP_NAME, token=token)
+
+@app.route('/verify_email/<token>')
+def verify_email(token):
+    # Find the verification request by token
+    verify_request = None
+    username = None
+    
+    for key, req in recovery_requests.items():
+        if req.get('type') == 'email_verification' and req.get('token') == token:
+            # Check if token is expired (24 hours)
+            timestamp = datetime.fromisoformat(req['timestamp'])
+            if datetime.now() - timestamp < timedelta(hours=24):
+                verify_request = req
+                username = req['username']
+                break
+    
+    if not verify_request:
+        flash('Invalid or expired verification link. Please request a new one from your profile.', 'error')
+        return redirect(url_for('login'))
+    
+    # Verify the user's email
+    if username in USERS:
+        USERS[username]['email_verified'] = True
+        save_users(USERS)
+        
+        # Remove the verification request
+        recovery_requests.pop(f"verify_{username}", None)
+        save_recovery_requests(recovery_requests)
+        
+        flash('Email verified successfully! You can now upload files.', 'success')
+        
+        # If user is logged in, redirect to profile, otherwise to login
+        if session.get('username') == username:
+            return redirect(url_for('profile', username=username))
+        else:
+            return redirect(url_for('login'))
+    else:
+        flash('User not found!', 'error')
+        return redirect(url_for('login'))
+
+@app.route('/resend_verification')
+def resend_verification():
+    if 'username' not in session:
+        flash('Please login first.', 'error')
+        return redirect(url_for('login'))
+    
+    username = session['username']
+    user = USERS.get(username)
+    
+    if not user:
+        flash('User not found!', 'error')
+        return redirect(url_for('login'))
+    
+    if user.get('email_verified'):
+        flash('Your email is already verified!', 'info')
+        return redirect(url_for('profile', username=username))
+    
+    # Generate new verification token
+    token = generate_token()
+    recovery_requests[f"verify_{username}"] = {
+        'type': 'email_verification',
+        'username': username,
+        'token': token,
+        'timestamp': datetime.now().isoformat()
+    }
+    save_recovery_requests(recovery_requests)
+    
+    # Send verification email
+    if send_verification_email(user['email'], token, username):
+        flash('Verification email sent! Please check your inbox.', 'success')
+    else:
+        flash('Failed to send verification email. Please try again later.', 'error')
+    
+    return redirect(url_for('profile', username=username))
 
 @app.route('/u/<username>', methods=['GET', 'POST'])
 def profile(username):
@@ -747,9 +1056,19 @@ def index():
         return redirect(url_for('login'))
     username = session['username']
     role = session.get('role', 'user')
+    
+    # Check email verification for file uploads
+    user_data = USERS.get(username, {})
+    email_verified = user_data.get('email_verified', False)
+    
     # Admin toggle: show all files or only own
     show_all = request.args.get('show_all') == '1' if role == 'admin' else False
     if request.method == 'POST':
+        # Block file upload if email is not verified
+        if not email_verified:
+            flash('Please verify your email before uploading files. Check your profile for the verification link.', 'error')
+            return redirect(url_for('profile', username=username))
+        
         if 'files' not in request.files:
             flash('No file part')
             return redirect(request.url)
@@ -846,7 +1165,7 @@ def index():
         user_files = file_db
     else:
         user_files = {fid: info for fid, info in file_db.items() if info.get('owner') == username}
-    return render_template('index.html', files=user_files, is_admin=(role=='admin'), show_all=show_all, APP_NAME=APP_NAME)
+    return render_template('index.html', files=user_files, is_admin=(role=='admin'), show_all=show_all, APP_NAME=APP_NAME, email_verified=email_verified, username=username)
 
 @app.route('/file/<file_id>', methods=['GET'])
 def file_page(file_id):
@@ -1105,6 +1424,13 @@ def admin_dashboard():
                 })
 
     # Prepare data for charts
+    # Filter recovery_requests to only show deleted account recovery requests (not email verification or password reset)
+    deleted_account_recovery_requests = {
+        username: req_data 
+        for username, req_data in recovery_requests.items()
+        if req_data.get('type') != 'email_verification' and req_data.get('type') != 'password_reset'
+    }
+    
     dashboard_data = {
         'total_files': len([f for f in file_db.values() if not f.get('is_bundle')]),
         'total_bundles': len([f for f in file_db.values() if f.get('is_bundle')]),
@@ -1119,7 +1445,7 @@ def admin_dashboard():
         'files_by_date': dict(sorted(files_by_date.items())),
         'max_storage_mb': MAX_STORAGE_MB,
         'permanently_deleted_users': permanently_deleted_users,
-        'recovery_requests': recovery_requests
+        'recovery_requests': deleted_account_recovery_requests
     }
 
     return render_template('admin_dashboard.html', data=dashboard_data, SETTINGS=SETTINGS, USERS=USERS, APP_NAME=APP_NAME)
@@ -1395,10 +1721,122 @@ def admin_recover_deleted_user():
     
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/update_email_config', methods=['POST'])
+def update_email_config():
+    """Update email configuration"""
+    if not _require_admin():
+        return redirect(url_for('login'))
+    
+    # Update email settings
+    email_config = {
+        'MAIL_SERVER': request.form.get('mail_server', '').strip(),
+        'MAIL_PORT': int(request.form.get('mail_port', 587)),
+        'MAIL_USE_TLS': bool(request.form.get('mail_use_tls')),
+        'MAIL_USERNAME': request.form.get('mail_username', '').strip(),
+        'MAIL_PASSWORD': request.form.get('mail_password', '').strip(),
+        'MAIL_DEFAULT_SENDER': request.form.get('mail_default_sender', '').strip()
+    }
+    
+    # Update SETTINGS
+    SETTINGS['email'] = email_config
+    save_settings()
+    
+    # Update Flask-Mail configuration
+    app.config.update(config.get_mail_config())
+    
+    # Reinitialize mail
+    global mail
+    mail = Mail(app)
+    
+    flash('Email configuration updated successfully!', 'success')
+    return redirect(url_for('admin_dashboard') + '#systemSettings')
+
+@app.route('/admin/test_email_config', methods=['POST'])
+def test_email_config():
+    """Test email configuration by sending a test email"""
+    if 'username' not in session or session.get('role') != 'admin':
+        return {'success': False, 'message': 'Admin access required'}, 403
+    
+    try:
+        user = USERS.get(session['username'])
+        if not user:
+            return {'success': False, 'message': 'User not found'}, 404
+        
+        email = user.get('email')
+        if not email:
+            return {'success': False, 'message': 'Admin email not configured'}, 400
+        
+        result = send_email(
+            email, 
+            f"Test Email from {APP_NAME}",
+            f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f5f5f5;">
+                    <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                        <h1 style="color: #4361ee; margin-bottom: 20px;">✅ Email Configuration Test</h1>
+                        <p style="font-size: 16px; line-height: 1.6; color: #333;">
+                            This is a test email from <strong>{APP_NAME}</strong>.
+                        </p>
+                        <p style="font-size: 16px; line-height: 1.6; color: #333;">
+                            If you received this message, your email configuration is working correctly! 🎉
+                        </p>
+                        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                            <p style="font-size: 14px; color: #666; margin: 0;">
+                                <strong>Current Configuration:</strong><br>
+                                Server: {app.config.get('MAIL_SERVER')}<br>
+                                Port: {app.config.get('MAIL_PORT')}<br>
+                                TLS: {app.config.get('MAIL_USE_TLS')}<br>
+                                Sender: {app.config.get('MAIL_DEFAULT_SENDER')}
+                            </p>
+                        </div>
+                    </div>
+                </body>
+            </html>
+            """
+        )
+        
+        if result:
+            return {'success': True, 'message': f'Test email sent successfully to {email}. Check your inbox!'}
+        else:
+            return {'success': False, 'message': 'Failed to send test email. Check server logs for details.'}, 500
+            
+    except Exception as e:
+        return {'success': False, 'message': f'Error sending test email: {str(e)}'}, 500
+
 @app.errorhandler(413)
 def file_too_large(e):
     flash('File is too large. Maximum allowed size is 40 MB.')
     return redirect(request.url)
+
+@app.route('/test_email')
+def test_email():
+    """Test route to check email configuration"""
+    if 'username' not in session:
+        return "Please login first"
+    
+    user = USERS.get(session['username'])
+    if not user:
+        return "User not found"
+    
+    email = user.get('email')
+    result = send_email(
+        email, 
+        f"Test Email from {APP_NAME}",
+        f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; padding: 20px;">
+                <h1>Test Email</h1>
+                <p>This is a test email from {APP_NAME}.</p>
+                <p>If you received this, your email configuration is working correctly!</p>
+            </body>
+        </html>
+        """
+    )
+    
+    if result:
+        return f"✅ Test email sent successfully to {email}. Check your inbox and console for details."
+    else:
+        return f"❌ Failed to send email to {email}. Check the console for error details."
 
 if __name__ == '__main__':
     if not os.path.exists(UPLOAD_FOLDER):
@@ -1407,4 +1845,22 @@ if __name__ == '__main__':
         os.makedirs(SESSION_FOLDER)
     if not os.path.exists(PROFILE_PICTURES_FOLDER):
         os.makedirs(PROFILE_PICTURES_FOLDER)
+    
+    # Check email configuration
+    print("\n" + "="*50)
+    print("EMAIL CONFIGURATION CHECK")
+    print("="*50)
+    print(f"MAIL_SERVER: {app.config.get('MAIL_SERVER')}")
+    print(f"MAIL_PORT: {app.config.get('MAIL_PORT')}")
+    print(f"MAIL_USE_TLS: {app.config.get('MAIL_USE_TLS')}")
+    print(f"MAIL_USERNAME: {app.config.get('MAIL_USERNAME')}")
+    print(f"MAIL_PASSWORD: {'***SET***' if app.config.get('MAIL_PASSWORD') else '❌ NOT SET ❌'}")
+    print(f"MAIL_DEFAULT_SENDER: {app.config.get('MAIL_DEFAULT_SENDER')}")
+    print("="*50 + "\n")
+    
+    if not app.config.get('MAIL_PASSWORD'):
+        print("⚠️  WARNING: MAIL_PASSWORD is not set in .env file!")
+        print("⚠️  Email features will not work until you configure it.")
+        print("⚠️  Please check the .env file and EMAIL_SETUP.md for instructions.\n")
+    
     app.run(debug=True)
