@@ -1,0 +1,25 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#4F46E5" stroke="#312E81" stroke-width="2"/>
+  
+  <!-- Document/File -->
+  <path d="M 35 30 L 55 30 L 65 40 L 65 60 L 35 60 Z" fill="white" stroke="white" stroke-width="1.5"/>
+  <path d="M 55 30 L 55 40 L 65 40" fill="#E0E7FF" stroke="white" stroke-width="1.5"/>
+  
+  <!-- Share arrows -->
+  <!-- Left arrow -->
+  <g transform="translate(-8, 0)">
+    <path d="M 30 50 L 20 50" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <path d="M 23 46 L 20 50 L 23 54" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  
+  <!-- Right arrow -->
+  <g transform="translate(8, 0)">
+    <path d="M 70 50 L 80 50" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <path d="M 77 46 L 80 50 L 77 54" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  
+  <!-- Connection dots -->
+  <circle cx="22" cy="50" r="4" fill="#FCD34D"/>
+  <circle cx="78" cy="50" r="4" fill="#FCD34D"/>
+</svg>
