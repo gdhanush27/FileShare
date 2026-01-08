@@ -10,7 +10,6 @@ import json
 from PIL import Image
 import io
 import secrets
-import config
 
 app = Flask(__name__)
 app.secret_key = "super-secret"
@@ -18,11 +17,8 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 SESSION_FOLDER = os.path.join(os.path.dirname(__file__), 'flask_session')
 PROFILE_PICTURES_FOLDER = os.path.join(os.path.dirname(__file__), 'profile_pictures')
 
-# Configure Flask-Mail from config.py
-mail_config = config.get_mail_config()
-app.config.update(mail_config)
-
-mail = Mail(app)
+# Mail will be configured after loading settings
+mail = None
 
 # Configure server-side session storage
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -48,35 +44,25 @@ FILES_DB_FILE = os.path.join(os.path.dirname(__file__), 'files_db.json')
 # File path for settings storage
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), 'settings.json')
 
-# File path for recovery requests storage
-RECOVERY_REQUESTS_FILE = os.path.join(os.path.dirname(__file__), 'recovery_requests.json')
-
 # In-memory file info storage: {file_id: {filename, path, timestamp}}
 file_db = {}
 
 # Helper to check admin
 ADMIN_USERS = {'gdhanush270'}
 
-# Application settings
+# Application settings (defaults, will be overridden by settings.json)
 SETTINGS = {
     'app_name': 'FileShare Pro',
     'max_file_size_mb': 40,
     'max_files_per_bundle': 5,
     'registration_open': True,
-    'total_server_storage_mb': 500,  # Total server storage in MB (100 GB)
-    'user_storage_limit_mb': 50,  # User storage limit in MB (applies to all users)
-    'email': {
-        'MAIL_SERVER': 'smtp.zoho.in',
-        'MAIL_PORT': 587,
-        'MAIL_USE_TLS': True,
-        'MAIL_USERNAME': 'filesharepro@zohomail.in',
-        'MAIL_PASSWORD': 'GMs559sTUX5N',
-        'MAIL_DEFAULT_SENDER': 'filesharepro@zohomail.in'
-    }
+    'total_server_storage_mb': 500,
+    'user_storage_limit_mb': 50
 }
 
 def load_settings():
-    """Load settings from JSON file"""
+    """Load settings from JSON file and configure Flask-Mail"""
+    global mail
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, 'r') as f:
@@ -84,20 +70,26 @@ def load_settings():
                 # Merge with default settings to ensure all keys exist
                 for key, value in loaded_settings.items():
                     SETTINGS[key] = value
-                # Sync email settings with config module
-                if 'email' in SETTINGS:
-                    config.EMAIL_CONFIG = SETTINGS['email']
         except (json.JSONDecodeError, IOError):
             pass
+    
+    # Configure Flask-Mail from settings
+    if 'email' in SETTINGS:
+        app.config.update({
+            'MAIL_SERVER': SETTINGS['email'].get('MAIL_SERVER', 'smtp.gmail.com'),
+            'MAIL_PORT': int(SETTINGS['email'].get('MAIL_PORT', 587)),
+            'MAIL_USE_TLS': SETTINGS['email'].get('MAIL_USE_TLS', True),
+            'MAIL_USERNAME': SETTINGS['email'].get('MAIL_USERNAME', ''),
+            'MAIL_PASSWORD': SETTINGS['email'].get('MAIL_PASSWORD', ''),
+            'MAIL_DEFAULT_SENDER': SETTINGS['email'].get('MAIL_DEFAULT_SENDER', '')
+        })
+    mail = Mail(app)
 
 def save_settings():
     """Save settings to JSON file"""
     try:
         with open(SETTINGS_FILE, 'w') as f:
             json.dump(SETTINGS, f, indent=2)
-        # Also sync email config to config module
-        if 'email' in SETTINGS:
-            config.save_config(SETTINGS['email'])
     except IOError:
         pass
 
@@ -140,24 +132,6 @@ def save_files_db(files_db):
     except IOError:
         pass
 
-def load_recovery_requests():
-    """Load recovery requests from JSON file"""
-    if os.path.exists(RECOVERY_REQUESTS_FILE):
-        try:
-            with open(RECOVERY_REQUESTS_FILE, 'r') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            pass
-    return {}
-
-def save_recovery_requests(requests):
-    """Save recovery requests to JSON file"""
-    try:
-        with open(RECOVERY_REQUESTS_FILE, 'w') as f:
-            json.dump(requests, f, indent=2)
-    except IOError:
-        pass
-
 # Load settings on startup
 load_settings()
 
@@ -167,11 +141,39 @@ USERS = load_users()
 # Load files database on startup
 file_db = load_files_db()
 
-# Load recovery requests on startup
-recovery_requests = load_recovery_requests()
-
 # Application name (pulled from settings)
 APP_NAME = SETTINGS.get('app_name', 'FileShare Pro')
+
+# Helper functions for recovery tokens stored in users.json
+def get_user_recovery_token(username, token_type):
+    """Get recovery token for a user (token_type: 'verify', 'password_reset', 'account_recovery')"""
+    user = USERS.get(username)
+    if user and 'recovery_tokens' in user:
+        return user['recovery_tokens'].get(token_type)
+    return None
+
+def set_user_recovery_token(username, token_type, token_data):
+    """Set recovery token for a user"""
+    if username in USERS:
+        if 'recovery_tokens' not in USERS[username]:
+            USERS[username]['recovery_tokens'] = {}
+        USERS[username]['recovery_tokens'][token_type] = token_data
+        save_users(USERS)
+
+def remove_user_recovery_token(username, token_type):
+    """Remove recovery token for a user"""
+    if username in USERS and 'recovery_tokens' in USERS[username]:
+        USERS[username]['recovery_tokens'].pop(token_type, None)
+        save_users(USERS)
+
+def find_user_by_token(token, token_type):
+    """Find username by recovery token"""
+    for username, user_data in USERS.items():
+        if 'recovery_tokens' in user_data:
+            token_data = user_data['recovery_tokens'].get(token_type)
+            if token_data and token_data.get('token') == token:
+                return username
+    return None
 
 def is_admin(username):
     return username.lower() in ADMIN_USERS
@@ -284,6 +286,50 @@ def send_verification_email(email, token, username):
     """
     return send_email(email, subject, html_body)
 
+def send_email_change_notification(old_email, new_email, username):
+    """Send email change notification to old email address"""
+    subject = f"Email Address Changed - {APP_NAME}"
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }}
+            .container {{ background-color: white; padding: 30px; border-radius: 10px; max-width: 600px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+            .header {{ background: linear-gradient(120deg, #ff6b6b, #ee5a6f); color: white; padding: 20px; border-radius: 10px 10px 0 0; margin: -30px -30px 20px -30px; }}
+            .info-box {{ background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 5px; }}
+            .new-email {{ color: #4361ee; font-weight: bold; }}
+            .footer {{ color: #666; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>⚠️ Email Address Changed</h1>
+            </div>
+            <p>Hello {username},</p>
+            <p>This is to inform you that the email address associated with your {APP_NAME} account has been changed.</p>
+            <div class="info-box">
+                <p><strong>Your email has been changed to:</strong></p>
+                <p class="new-email">{new_email}</p>
+            </div>
+            <p>If you made this change, no further action is needed. You will need to verify your new email address to continue using all features.</p>
+            <p><strong>If you did NOT make this change:</strong></p>
+            <ul>
+                <li>Your account security may be compromised</li>
+                <li>Please contact support immediately</li>
+                <li>Change your password as soon as possible</li>
+            </ul>
+            <div class="footer">
+                <p>This is an automated security notification from {APP_NAME}. Please do not reply to this email.</p>
+                <p>Sent on: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return send_email(old_email, subject, html_body)
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     print("=== REGISTER ROUTE CALLED ===")
@@ -385,24 +431,18 @@ def register():
         
         # Generate verification token
         token = generate_token()
-        recovery_requests[f"verify_{username_lower}"] = {
+        set_user_recovery_token(username_lower, 'verify', {
             'type': 'email_verification',
             'username': username_lower,
             'token': token,
             'timestamp': datetime.now().isoformat()
-        }
-        save_recovery_requests(recovery_requests)
+        })
         
         # Send verification email
         if send_verification_email(email, token, username):
             flash('Account created successfully! Please check your email to verify your account.', 'success')
         else:
             flash('Account created but failed to send verification email. You can request it again from your profile.', 'warning')
-        
-        # Remove any pending password recovery request for this username
-        if username_lower in recovery_requests:
-            recovery_requests.pop(username_lower, None)
-            save_recovery_requests(recovery_requests)
         
         print(f"User registered successfully: {username_lower}")
         print(f"Current users: {list(USERS.keys())}")
@@ -435,18 +475,18 @@ def recover():
             deletion_date = deleted_at + timedelta(days=30)
             
             # Only process if 30 days have passed and no existing request
-            if datetime.now() > deletion_date and username_lower not in recovery_requests:
+            token_data = get_user_recovery_token(username_lower, 'account_recovery')
+            if datetime.now() > deletion_date and not token_data:
                 should_process = True
         
         # Process the recovery request if credentials are correct
         if should_process:
-            recovery_requests[username_lower] = {
+            set_user_recovery_token(username_lower, 'account_recovery', {
                 'username': username_lower,
                 'requested_at': datetime.now().isoformat(),
                 'deleted_at': user['deleted_at'],
                 'role': user.get('role', 'user')
-            }
-            save_recovery_requests(recovery_requests)
+            })
         
         # Always show the same message regardless of success
         flash('Request will be sent if the credentials are correct.', 'info')
@@ -522,13 +562,12 @@ def forgot_password():
         if user_found and not user_found.get('deleted_at'):
             # Generate reset token
             token = generate_token()
-            recovery_requests[username_found] = {
+            set_user_recovery_token(username_found, 'password_reset', {
                 'type': 'password_reset',
                 'username': username_found,
                 'token': token,
                 'timestamp': datetime.now().isoformat()
-            }
-            save_recovery_requests(recovery_requests)
+            })
             
             # Send reset email
             send_password_reset_email(email, token)
@@ -541,19 +580,16 @@ def forgot_password():
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     # Find the reset request by token
-    reset_request = None
-    username = None
+    username = find_user_by_token(token, 'password_reset')
     
-    for key, req in recovery_requests.items():
-        if req.get('type') == 'password_reset' and req.get('token') == token:
-            # Check if token is expired (1 hour)
-            timestamp = datetime.fromisoformat(req['timestamp'])
-            if datetime.now() - timestamp < timedelta(hours=1):
-                reset_request = req
-                username = req['username']
-                break
+    if username:
+        token_data = get_user_recovery_token(username, 'password_reset')
+        # Check if token is expired (1 hour)
+        timestamp = datetime.fromisoformat(token_data['timestamp'])
+        if datetime.now() - timestamp >= timedelta(hours=1):
+            username = None
     
-    if not reset_request:
+    if not username:
         flash('Invalid or expired reset link. Please request a new one.', 'error')
         return redirect(url_for('forgot_password'))
     
@@ -575,8 +611,7 @@ def reset_password(token):
             save_users(USERS)
             
             # Remove the reset request
-            recovery_requests.pop(username, None)
-            save_recovery_requests(recovery_requests)
+            remove_user_recovery_token(username, 'password_reset')
             
             flash('Password reset successfully! You can now login with your new password.', 'success')
             return redirect(url_for('login'))
@@ -589,19 +624,16 @@ def reset_password(token):
 @app.route('/verify_email/<token>')
 def verify_email(token):
     # Find the verification request by token
-    verify_request = None
-    username = None
+    username = find_user_by_token(token, 'verify')
     
-    for key, req in recovery_requests.items():
-        if req.get('type') == 'email_verification' and req.get('token') == token:
-            # Check if token is expired (24 hours)
-            timestamp = datetime.fromisoformat(req['timestamp'])
-            if datetime.now() - timestamp < timedelta(hours=24):
-                verify_request = req
-                username = req['username']
-                break
+    if username:
+        token_data = get_user_recovery_token(username, 'verify')
+        # Check if token is expired (24 hours)
+        timestamp = datetime.fromisoformat(token_data['timestamp'])
+        if datetime.now() - timestamp >= timedelta(hours=24):
+            username = None
     
-    if not verify_request:
+    if not username:
         flash('Invalid or expired verification link. Please request a new one from your profile.', 'error')
         return redirect(url_for('login'))
     
@@ -611,8 +643,7 @@ def verify_email(token):
         save_users(USERS)
         
         # Remove the verification request
-        recovery_requests.pop(f"verify_{username}", None)
-        save_recovery_requests(recovery_requests)
+        remove_user_recovery_token(username, 'verify')
         
         flash('Email verified successfully! You can now upload files.', 'success')
         
@@ -644,13 +675,12 @@ def resend_verification():
     
     # Generate new verification token
     token = generate_token()
-    recovery_requests[f"verify_{username}"] = {
+    set_user_recovery_token(username, 'verify', {
         'type': 'email_verification',
         'username': username,
         'token': token,
         'timestamp': datetime.now().isoformat()
-    }
-    save_recovery_requests(recovery_requests)
+    })
     
     # Send verification email
     if send_verification_email(user['email'], token, username):
@@ -715,38 +745,67 @@ def profile(username):
                     flash('Email already in use by another account!', 'error')
                     return redirect(url_for('profile', username=username))
             
-            # Update email
+            # Update email and reset verification if changed
+            old_email = USERS.get(username, {}).get('email', '')
             USERS[username]['email'] = new_email
+            if old_email.strip().lower() != new_email.strip().lower():
+                USERS[username]['email_verified'] = False
+                
+                # Send notification to old email about the change
+                if old_email:
+                    send_email_change_notification(old_email, new_email, username)
+                
+                # Send verification email to new email address
+                token = generate_token()
+                set_user_recovery_token(username, 'verify', {
+                    'type': 'email_verification',
+                    'username': username,
+                    'token': token,
+                    'timestamp': datetime.now().isoformat()
+                })
+                send_verification_email(new_email, token, username)
+                
             save_users(USERS)
-            flash('Email changed successfully!', 'success')
+            flash('Email changed successfully! Please check both your old and new email addresses.', 'success')
+            return redirect(url_for('profile', username=username))
+
+        # Handle password reset request via email
+        if action == 'change_password':
+            user = USERS.get(username)
+            if not user:
+                flash('User not found.', 'error')
+                return redirect(url_for('login'))
+            token = generate_token()
+            set_user_recovery_token(username, 'password_reset', {
+                'type': 'password_reset',
+                'username': username,
+                'token': token,
+                'timestamp': datetime.now().isoformat()
+            })
+            if send_password_reset_email(user.get('email', ''), token):
+                flash('Password reset link sent to your email.', 'success')
+            else:
+                flash('Failed to send password reset email. Please try again later.', 'error')
             return redirect(url_for('profile', username=username))
         
-        # Handle password change
-        current_password = request.form.get('current_password')
-        new_password = request.form.get('new_password')
-        confirm_password = request.form.get('confirm_password')
-        
-        # Validate inputs
-        if not current_password or not new_password or not confirm_password:
-            flash('All fields are required!', 'error')
-            return render_template('profile.html', username=username, user_info=USERS.get(username, {}), is_own_profile=is_own_profile, APP_NAME=APP_NAME)
-        
-        # Check current password
-        user = USERS.get(username)
-        if not user or user['password'] != current_password:
-            flash('Current password is incorrect!', 'error')
-            return render_template('profile.html', username=username, user_info=USERS.get(username, {}), is_own_profile=is_own_profile, APP_NAME=APP_NAME)
-        
-        # Check new passwords match
-        if new_password != confirm_password:
-            flash('New passwords do not match!', 'error')
-            return render_template('profile.html', username=username, user_info=USERS.get(username, {}), is_own_profile=is_own_profile, APP_NAME=APP_NAME)
-        
-        # Update password
-        USERS[username]['password'] = new_password
-        save_users(USERS)
-        flash('Password changed successfully!', 'success')
-        return redirect(url_for('profile', username=username))
+        # Enforce email-based password changes: send reset link
+        if request.form.get('current_password') or request.form.get('new_password') or request.form.get('confirm_password'):
+            user = USERS.get(username)
+            if not user:
+                flash('User not found.', 'error')
+                return redirect(url_for('login'))
+            token = generate_token()
+            set_user_recovery_token(username, 'password_reset', {
+                'type': 'password_reset',
+                'username': username,
+                'token': token,
+                'timestamp': datetime.now().isoformat()
+            })
+            if send_password_reset_email(user.get('email', ''), token):
+                flash('Password reset link sent to your email.', 'success')
+            else:
+                flash('Failed to send password reset email. Please try again later.', 'error')
+            return redirect(url_for('profile', username=username))
     
     user_info = USERS.get(username, {})
     
@@ -1049,6 +1108,17 @@ def preview_image(file_id):
     except Exception as e:
         # If preview generation fails, serve original
         return send_file(file_path, mimetype=mime_type)
+
+# PWA Routes
+@app.route('/service-worker.js')
+def service_worker():
+    """Serve the service worker with correct MIME type"""
+    return send_from_directory('static', 'service-worker.js', mimetype='application/javascript')
+
+@app.route('/manifest.json')
+def manifest():
+    """Serve the PWA manifest with correct MIME type"""
+    return send_from_directory('static', 'manifest.json', mimetype='application/json')
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -1424,12 +1494,12 @@ def admin_dashboard():
                 })
 
     # Prepare data for charts
-    # Filter recovery_requests to only show deleted account recovery requests (not email verification or password reset)
-    deleted_account_recovery_requests = {
-        username: req_data 
-        for username, req_data in recovery_requests.items()
-        if req_data.get('type') != 'email_verification' and req_data.get('type') != 'password_reset'
-    }
+    # Get deleted account recovery requests from users
+    deleted_account_recovery_requests = {}
+    for username, user_data in USERS.items():
+        token_data = get_user_recovery_token(username, 'account_recovery')
+        if token_data:
+            deleted_account_recovery_requests[username] = token_data
     
     dashboard_data = {
         'total_files': len([f for f in file_db.values() if not f.get('is_bundle')]),
@@ -1496,10 +1566,9 @@ def admin_reset_password():
         return redirect(url_for('login'))
 
     username = (request.form.get('username') or '').strip()
-    password = request.form.get('password') or ''
-
-    if not username or not password:
-        flash('Username and new password are required.', 'error')
+    # Admins cannot directly set passwords; send reset link
+    if not username:
+        flash('Username is required.', 'error')
         return redirect(url_for('admin_dashboard'))
 
     # Convert username to lowercase for case-insensitive lookup
@@ -1508,9 +1577,18 @@ def admin_reset_password():
         flash('User does not exist.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    USERS[username_lower]['password'] = password
-    save_users(USERS)
-    flash(f'Password reset for {username_lower}.', 'success')
+    token = generate_token()
+    set_user_recovery_token(username_lower, 'password_reset', {
+        'type': 'password_reset',
+        'username': username_lower,
+        'token': token,
+        'timestamp': datetime.now().isoformat()
+    })
+    user_email = USERS[username_lower].get('email', '')
+    if send_password_reset_email(user_email, token):
+        flash(f'Password reset link sent to {username_lower}.', 'success')
+    else:
+        flash('Failed to send password reset email. Please check email settings.', 'error')
     return redirect(url_for('admin_dashboard'))
 
 
@@ -1621,7 +1699,8 @@ def admin_approve_recovery():
     username_lower = username.lower()
     
     # Check if recovery request exists
-    if username_lower not in recovery_requests:
+    token_data = get_user_recovery_token(username_lower, 'account_recovery')
+    if not token_data:
         flash('Recovery request not found.', 'error')
         return redirect(url_for('admin_dashboard'))
     
@@ -1645,8 +1724,7 @@ def admin_approve_recovery():
         flash(f'Account {username_lower} has been successfully recovered without files!', 'success')
     
     # Remove the recovery request
-    recovery_requests.pop(username_lower, None)
-    save_recovery_requests(recovery_requests)
+    remove_user_recovery_token(username_lower, 'account_recovery')
     
     return redirect(url_for('admin_dashboard'))
 
@@ -1666,13 +1744,13 @@ def admin_deny_recovery():
     username_lower = username.lower()
     
     # Check if recovery request exists
-    if username_lower not in recovery_requests:
+    token_data = get_user_recovery_token(username_lower, 'account_recovery')
+    if not token_data:
         flash('Recovery request not found.', 'error')
         return redirect(url_for('admin_dashboard'))
     
     # Remove the recovery request
-    recovery_requests.pop(username_lower, None)
-    save_recovery_requests(recovery_requests)
+    remove_user_recovery_token(username_lower, 'account_recovery')
     
     flash(f'Recovery request for {username_lower} has been denied.', 'info')
     return redirect(url_for('admin_dashboard'))
@@ -1742,7 +1820,14 @@ def update_email_config():
     save_settings()
     
     # Update Flask-Mail configuration
-    app.config.update(config.get_mail_config())
+    app.config.update({
+        'MAIL_SERVER': email_config.get('MAIL_SERVER', 'smtp.gmail.com'),
+        'MAIL_PORT': int(email_config.get('MAIL_PORT', 587)),
+        'MAIL_USE_TLS': email_config.get('MAIL_USE_TLS', True),
+        'MAIL_USERNAME': email_config.get('MAIL_USERNAME', ''),
+        'MAIL_PASSWORD': email_config.get('MAIL_PASSWORD', ''),
+        'MAIL_DEFAULT_SENDER': email_config.get('MAIL_DEFAULT_SENDER', '')
+    })
     
     # Reinitialize mail
     global mail
@@ -1863,4 +1948,4 @@ if __name__ == '__main__':
         print("⚠️  Email features will not work until you configure it.")
         print("⚠️  Please check the .env file and EMAIL_SETUP.md for instructions.\n")
     
-    app.run(debug=True)
+    app.run(debug=True, port=5001)

@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="description" content="Secure File Sharing Platform">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <title>Admin Dashboard | {{ APP_NAME }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
@@ -921,6 +926,35 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Toast helper
+        function showToast(message, type = 'success', delay = 4000) {
+            let container = document.getElementById('toastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toastContainer';
+                container.className = 'toast-container position-fixed top-0 end-0 p-3';
+                document.body.appendChild(container);
+            }
+
+            const toastEl = document.createElement('div');
+            const isSuccess = type === 'success';
+            const isWarning = type === 'warning';
+            const colorClass = isSuccess ? 'bg-success text-white' : (isWarning ? 'bg-warning text-dark' : 'bg-danger text-white');
+            toastEl.className = `toast align-items-center ${colorClass} border-0`;
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+            toastEl.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">${message}</div>
+                    <button type="button" class="btn-close ${isSuccess ? 'btn-close-white' : ''} me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>`;
+            container.appendChild(toastEl);
+            const toast = new bootstrap.Toast(toastEl, { delay });
+            toast.show();
+            toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+        }
+
         // Chart.js configuration
         Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
         Chart.defaults.color = '#212529';
@@ -1314,15 +1348,19 @@
                 btn.innerHTML = originalText;
                 
                 if (data.success) {
-                    alert('✅ ' + data.message);
+                    // Prefer server message; fallback to composed message
+                    const email = (data.to || document.getElementById('mailUsername')?.value || document.getElementById('mailDefaultSender')?.value || '').trim();
+                    const message = data.message || (email ? `✅ Test email sent successfully to ${email}. Check your inbox!` : '✅ Test email sent successfully. Check your inbox!');
+                    showToast(message, 'success');
                 } else {
-                    alert('❌ ' + data.message);
+                    const err = data.message || 'Failed to send test email.';
+                    showToast('❌ ' + err, 'danger');
                 }
             })
             .catch(error => {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
-                alert('❌ Error testing email configuration: ' + error);
+                showToast('❌ Error testing email configuration: ' + error, 'danger');
             });
         }
 
