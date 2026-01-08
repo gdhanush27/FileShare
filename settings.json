@@ -4,5 +4,13 @@
   "max_files_per_bundle": 5,
   "registration_open": true,
   "total_server_storage_mb": 500,
-  "user_storage_limit_mb": 50
+  "user_storage_limit_mb": 50,
+  "email": {
+      "MAIL_SERVER": "smtp.gmail.com",
+      "MAIL_PORT": 587,
+      "MAIL_USE_TLS": true,
+      "MAIL_USERNAME": "filesharepro.help@gmail.com",
+      "MAIL_PASSWORD": "atuo nziy mvji ykxx ",
+      "MAIL_DEFAULT_SENDER": "filesharepro.help@gmail.com"
+  }
 }

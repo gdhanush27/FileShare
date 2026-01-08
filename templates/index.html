@@ -841,12 +841,28 @@
             });
         }, 3000);
 
-        // Register Service Worker for PWA
+        // Register Service Worker for PWA with update handling
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/service-worker.js')
                     .then(registration => {
-                        console.log('Service Worker registered successfully:', registration.scope);
+                        console.log('Service Worker registered:', registration.scope);
+                        
+                        // Check for updates every time the page loads
+                        registration.update();
+                        
+                        // Listen for new service worker taking over
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'activated') {
+                                    // Reload to use new service worker
+                                    if (confirm('New version available! Reload to update?')) {
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
                     })
                     .catch(error => {
                         console.log('Service Worker registration failed:', error);
