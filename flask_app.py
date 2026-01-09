@@ -10,6 +10,7 @@ import json
 from PIL import Image
 import io
 import secrets
+import re
 
 app = Flask(__name__)
 app.secret_key = "super-secret"
@@ -330,6 +331,56 @@ def send_email_change_notification(old_email, new_email, username):
     """
     return send_email(old_email, subject, html_body)
 
+def validate_username(username):
+    """
+    Validate username format.
+    Returns (is_valid, error_message)
+    
+    Rules:
+    - 3-20 characters long
+    - Only alphanumeric characters, underscores, and hyphens
+    - Must start with a letter or number
+    - Cannot end with underscore or hyphen
+    """
+    if not username:
+        return False, "Username is required"
+    
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters long"
+    
+    if len(username) > 20:
+        return False, "Username must be no more than 20 characters long"
+    
+    # Check if username starts with alphanumeric
+    if not username[0].isalnum():
+        return False, "Username must start with a letter or number"
+    
+    # Check if username ends with alphanumeric
+    if not username[-1].isalnum():
+        return False, "Username cannot end with underscore or hyphen"
+    
+    # Check for valid characters (alphanumeric, underscore, hyphen)
+    if not re.match(r'^[a-zA-Z0-9_-]+$', username):
+        return False, "Username can only contain letters, numbers, underscores, and hyphens"
+    
+    return True, None
+
+
+def validate_email(email):
+    """
+    Validate email format.
+    Returns (is_valid, error_message)
+    """
+    if not email:
+        return False, "Email is required"
+    
+    # Basic email regex pattern
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return False, "Invalid email format"
+    
+    return True, None
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     print("=== REGISTER ROUTE CALLED ===")
@@ -337,18 +388,41 @@ def register():
     if not SETTINGS.get('registration_open', True):
         flash('Registration is currently disabled. Please contact an admin.', 'error')
         return redirect(url_for('login'))
+    
     if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        print(f"Registration attempt - Username: {username}, Email: {email}, Password: {password}, Confirm: {confirm_password}")
+        username = request.form.get('username', '').strip()
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        print(f"Registration attempt - Username: {username}, Email: {email}")
+        
+        # Validate all fields are present
         if not username or not email or not password or not confirm_password:
             flash('All fields are required!', 'error')
-            return render_template('register.html')
+            return render_template('register.html', APP_NAME=APP_NAME)
+        
+        # Validate username format
+        is_valid, error_msg = validate_username(username)
+        if not is_valid:
+            flash(error_msg, 'error')
+            return render_template('register.html', APP_NAME=APP_NAME)
+        
+        # Validate email format
+        is_valid, error_msg = validate_email(email)
+        if not is_valid:
+            flash(error_msg, 'error')
+            return render_template('register.html', APP_NAME=APP_NAME)
+        
+        # Validate password strength
+        if len(password) < 8:
+            flash('Password must be at least 8 characters long!', 'error')
+            return render_template('register.html', APP_NAME=APP_NAME)
+        
+        # Check password match
         if password != confirm_password:
             flash('Passwords do not match!', 'error')
-            return render_template('register.html')
+            return render_template('register.html', APP_NAME=APP_NAME)
         
         # Check if email already exists
         email_lower = email.lower()
@@ -361,7 +435,7 @@ def register():
                     if datetime.now() > deletion_date:
                         continue  # This deleted account can be replaced
                 flash('Email already in use!', 'error')
-                return render_template('register.html')
+                return render_template('register.html', APP_NAME=APP_NAME)
         
         # Convert username to lowercase for case-insensitive comparison
         username_lower = username.lower()
@@ -414,10 +488,10 @@ def register():
                     # Now create new user (continue below)
                 else:
                     flash('Username already exists!', 'error')
-                    return render_template('register.html')
+                    return render_template('register.html', APP_NAME=APP_NAME)
             else:
                 flash('Username already exists!', 'error')
-                return render_template('register.html')
+                return render_template('register.html', APP_NAME=APP_NAME)
         
         # Create new user with email_verified set to False
         USERS[username_lower] = {
@@ -446,8 +520,8 @@ def register():
         
         print(f"User registered successfully: {username_lower}")
         print(f"Current users: {list(USERS.keys())}")
-        flash('Registration successful! Please log in.', 'success')
         return redirect(url_for('login'))
+    
     print("Returning register.html template")
     return render_template('register.html', APP_NAME=APP_NAME)
 
@@ -499,12 +573,18 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username') or ""
         password = request.form.get('password') or ""
-        print(f"Login attempt - Username: {username}, Password: {password}")
+        print(f"Login attempt - Username: {username}")
+        
+        if not username or not password:
+            flash('Please enter both username and password!', 'error')
+            return render_template('login.html', APP_NAME=APP_NAME)
         
         # Convert username to lowercase for case-insensitive lookup
-        username_lower = username.lower()
+        username_lower = username.lower().strip()
         user = USERS.get(username_lower)
-        print(f"User found: {user}")
+        
+        print(f"User found: {user is not None}")
+        
         if user and user['password'] == password:
             # Check if account is marked for deletion
             if user.get('deleted_at'):
@@ -519,7 +599,7 @@ def login():
                     # Account is scheduled for deletion, allow login to recover
                     session['username'] = username_lower
                     session['role'] = user['role']
-                    flash(f'Your account is scheduled for deletion on {deletion_date.strftime("%B %d, %Y")}. Visit your profile to recover it.', 'error')
+                    flash(f'Your account is scheduled for deletion on {deletion_date.strftime("%B %d, %Y")}. Visit your profile to recover it.', 'warning')
                     return redirect(url_for('index'))
             
             session['username'] = username_lower
@@ -529,8 +609,10 @@ def login():
             return redirect(url_for('index'))
         else:
             print(f"Login failed for: {username_lower}")
-            flash('Invalid username or password!', 'error')
+            # Generic error message to prevent username enumeration
+            flash('Invalid username or password! Please try again.', 'error')
             return render_template('login.html', APP_NAME=APP_NAME)
+    
     return render_template('login.html', APP_NAME=APP_NAME)
 
 @app.route('/logout')
@@ -1534,11 +1616,28 @@ def admin_create_user():
         return redirect(url_for('login'))
 
     username = (request.form.get('username') or '').strip()
-    email = request.form.get('email') or ''
+    email = (request.form.get('email') or '').strip()
     password = request.form.get('password') or ''
 
     if not username or not email or not password:
         flash('Username, email, and password are required.', 'error')
+        return redirect(url_for('admin_dashboard'))
+
+    # Validate username format
+    is_valid, error_msg = validate_username(username)
+    if not is_valid:
+        flash(f'Invalid username: {error_msg}', 'error')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Validate email format
+    is_valid, error_msg = validate_email(email)
+    if not is_valid:
+        flash(f'Invalid email: {error_msg}', 'error')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Validate password strength
+    if len(password) < 8:
+        flash('Password must be at least 8 characters long!', 'error')
         return redirect(url_for('admin_dashboard'))
 
     # Check if email already exists
@@ -1554,11 +1653,16 @@ def admin_create_user():
         flash('User already exists.', 'error')
         return redirect(url_for('admin_dashboard'))
 
-    USERS[username_lower] = {'password': password, 'email': email, 'role': 'user', 'storage_limit_mb': 50}
+    USERS[username_lower] = {
+        'password': password, 
+        'email': email, 
+        'role': 'user', 
+        'storage_limit_mb': 50,
+        'email_verified': True  # Admin-created users are auto-verified
+    }
     save_users(USERS)
     flash(f'User {username_lower} created successfully.', 'success')
     return redirect(url_for('admin_dashboard'))
-
 
 @app.route('/admin/reset_password', methods=['POST'])
 def admin_reset_password():
